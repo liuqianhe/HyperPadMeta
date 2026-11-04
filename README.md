@@ -1,22 +1,16 @@
-# MiuiPadMeta
+# HyperPadMeta
 
-为MIUI设备恢复键盘Meta/Win键功能（禁用掉小米的快捷键），同时禁用Alt-Tab快捷键。这样就可以在远程桌面里用Meta键和Alt-Tab了。适配小米平板5系列以及Android12+的MIUI手机，现已支持 HyperOS 3 / Android 16（实测小米平板6S Pro）。
+在 **HyperOS 3 / Android 16** 上恢复键盘 Meta/Win 键，把 `Alt+Tab`、`Win`、`Win+D`、`Win+TAB` 透传给远程桌面：屏蔽系统的最近任务与「显示桌面」响应，同时避免关掉系统快捷键后被吞键。实测设备：小米平板 6S Pro（OS3.0.304.0.WNXCNXM）。
 
-Restore Meta/Win key function on MIUI devices(disable Xiaomi hotkeys), and disable Alt-Tab hotkey. Allows you to use Meta and Alt-Tab key in Remote Desktop。Adapted for Xiaomi Pad 5 Series and MIUI phones with Android12+, now working on HyperOS 3 / Android 16 (tested on Xiaomi Pad 6S Pro).
-
-
+> **适配范围：只支持 HyperOS 3 / Android 16。** 本仓库是 [CwithW/MiuiPadMeta](https://github.com/CwithW/MiuiPadMeta) 的 fork，上游面向 MIUI / Android 11–13；fork 把包名（`pub.chara.miuipadmeta` → `pub.chara.hyperpadmeta`）和按键适配代码都改成了 HyperOS 3 的链路，**应不适配 MIUI 及 Android 15 以下版本**，旧系统请继续用原 MiuiPadMeta。
 
 ### 系统版本支持情况 OS version support
 
-| 系统版本           | 恢复Meta键 | 禁用Alt-Tab |
-| ------------------ | ---------- | ----------- |
-| MIUI12.5 Android11 | ? *         | ?           |
-| MIUI13 Android11   | √ **         | √           |
-| MIUI13 Android12   | √          | √           |
-| MIUI14 Android13   | √          | √           |
-| HyperOS（1/2，未测）| √? ****       | √? ***        |
+| 系统版本                | 恢复Meta键 | 禁用Alt-Tab |
+| ----------------------- | ---------- | ----------- |
+| HyperOS（1/2，未测）    | √? ****    | √? ****     |
 | **HyperOS 3 Android16** | **√**      | **√**       |
-| 非MIUI系统         | N/A        | ? ***        |
+| 非MIUI系统              | N/A        | ? ***       |
 
 √ 表示经过测试，目前支持
 
@@ -24,39 +18,28 @@ Restore Meta/Win key function on MIUI devices(disable Xiaomi hotkeys), and disab
 
 × 表示经过测试，目前不支持
 
-> *Android11上仅支持小米平板5系列，不支持MIUI手机
->
-> **MIUI for Pad Android11: PC模式下的快捷键依旧可用，PC模式的快捷键是另一套逻辑实现，请退出PC模式
->
-> ***禁用Alt-Tab理论上在所有Android系统上支持。
+> 禁用Alt-Tab理论上在所有Android系统上支持。
 >
 > **HyperOS 3 / Android 16 已在小米平板6S Pro（OS3.0.304.0.WNXCNXM）上实测通过**。
->
-> [DisableAltTab](https://modules.lsposed.org/module/pub.chara.disablealttab) 模块为独立出来的禁用Alt-Tab功能，适配所有Android设备。
 
-
-
-#### 在以下系统版本实机测试可以使用：
-
-小米平板5Pro MIUI稳定版13.0.8.0 Android11
-
-小米平板5Pro MIUI稳定版13.0.10 Android11
-
-小米平板5Pro MIUI稳定版13.1.4.0 Android12
-
-小米平板5Pro MIUI开发版14.0.23.1.9 Android13
-
-红米K50 MIUI稳定版13.0.24 Android12
-
-红米K50 MIUI稳定版14.0.4 Android13
+#### 实机测试记录：
 
 小米平板6S Pro HyperOS 3.0 OS3.0.304.0.WNXCNXM Android16
+
+### 安装 Installation
+
+1. 设备需已 root 并安装 **LSPosed**（或其他支持模块的 Xposed 框架）；
+2. 安装 [Release](https://github.com/liuqianhe/HyperPadMeta/releases) 里的 APK，在 LSPosed 管理器里启用模块，**作用域勾选「系统」（`android`）**；
+3. 重启一次设备（首次启用必须重启才注入 `system_server`）；
+4. 桌面出现「HyperPadMeta」图标即可打开设置页调开关 —— **之后改开关不用再重启**。
+
+> 从旧包名 `pub.chara.miuipadmeta`升级时请把旧模块在 LSPosed 里停用，两者同时启用会重复 hook。
 
 ### 鸣谢 Special thanks
 
 本模块借鉴了 [MiuiPadESC](https://github.com/YifePlayte/MiuiPadESC) 的框架代码。
 
-[MiuiPadESC](https://modules.lsposed.org/module/com.yifeplayte.miuipadesc) 配合此模块可以恢复ESC和禁用Win-D快捷键，实现远程桌面下全部键位可用
+[MiuiPadESC](https://modules.lsposed.org/module/com.yifeplayte.miuipadesc) 用来恢复 ESC（本模块不管 ESC）。上游时代它还要负责禁用 Win+D，本 fork 已经自己接管了 Win+D，不需要再靠它。
 
 [MaxMiPadInput](https://modules.lsposed.org/module/com.yifeplayte.maxmipadinput) MIUI14 下 MiuiPadESC失效 需要用这个模块恢复ESC
 
@@ -91,15 +74,11 @@ Restore Meta/Win key function on MIUI devices(disable Xiaomi hotkeys), and disab
 
 #### Android13
 
-​	同Android12 不需要单独适配
+同 Android12，不需要单独适配。
 
-#### HyperOS
+#### HyperOS 3
 
-部分功能（如按下Meta唤出Dock栏）放到了`com.android.server.policy.BaseMiuiPhoneWindowManager.handleMetaKey`里处理（在miui-services.jar）
-
-win+xx快捷键，没找着在哪handle的，建议小米设置里关了得了
-
-#### HyperOS 3 / Android 16（新增适配）
+HyperOS 3 上这些组合由 `MiuiKeyShortcutRuleManager` 注册成 `KeyboardCombinationRule`，再交给 AOSP 的 `KeyCombinationManager` 判定是否消费。
 
 在 HyperOS 3 上，Alt-Tab 与 Win 键都被小米自己的 `BaseMiuiPhoneWindowManager` 子类 / 快捷键规则系统在更早阶段接管：
 
@@ -114,31 +93,47 @@ win+xx快捷键，没找着在哪handle的，建议小米设置里关了得了
 - `KeyboardCombinationRule.shouldInterceptKeys()` 只按 primaryKey + metaState 精确匹配就返回 true 拦截，**不看快捷键是否 enable** —— 无论「Win D / Win TAB」开关开/关，带 meta 的按键都会被消费/吞掉；
 - 旧模块用来禁用整套小米快捷键的 `MiuiKeyShortcutManager` 类已被删除，原 hook 整体失效。
 
-适配方式（见 `hook/HyperOSAltTabHooks.kt`，SDK ≥ 35 时由 `MainHook` 装载）：对以下方法做 before hook，Alt+Tab 与任何带 Win 修饰（`META_META_ON`）的事件一律短路放行，让按键只交给前台/远程桌面：
+适配方式（见 `hook/HyperOSAltTabHooks.kt`，SDK ≥ 35 时由 `MainHook` 装载）：对以下方法做 before hook，命中设置页开关的 Alt+Tab 与带 Win 修饰（`META_META_ON`）的事件短路放行，让按键只交给前台/远程桌面；开关关闭时完全不干预：
 
-1. `BaseMiuiPhoneWindowManager.interceptKeyBeforeDispatching` → `param.result = 0L`（Alt+Tab 或 Meta/Win）
+1. `BaseMiuiPhoneWindowManager.interceptKeyBeforeDispatching` → `param.result = 0L`（Alt+Tab / Meta 键 / Win 组合，按对应开关）
 2. AOSP `PhoneWindowManager.interceptKeyBeforeDispatching` → `param.result = 0L`
-3. `BaseMiuiPhoneWindowManager.handleAltTab(KeyEvent)` → `param.result = null`
-4. `BaseMiuiPhoneWindowManager.handleMetaKey(KeyEvent)` → `param.result = null`（单按 Win 不弹 Dock）
-5. `KeyboardCombinationRule.shouldInterceptKeys(int, int)` → 带 `META_META_ON` 时返回 `false`（不拦截 Win 组合）
-6. `KeyCombinationManager.isKeyConsumed` / `shouldConsumedKey` → 对 Win 事件返回 `false`（兜底）
+3. `BaseMiuiPhoneWindowManager.handleAltTab(KeyEvent)` → `param.result = null`（受「Alt+Tab」开关控制）
+4. `BaseMiuiPhoneWindowManager.handleMetaKey(KeyEvent)` → `param.result = null`（受「Win 键」开关控制，单按 Win 不弹 Dock）
+5. `KeyboardCombinationRule.shouldInterceptKeys(int, int)` → 命中项返回 `false`（不拦截 Win 组合）
+6. `KeyCombinationManager.isKeyConsumed` / `shouldConsumedKey` → 命中项返回 `false`（兜底）
 
 实测（小米平板6S Pro，HyperOS 3 / Android 16）：
 
-- **Alt+Tab**：无论开关开/关，都只交给远程桌面，系统不再弹最近任务、也不屏蔽按键；
-- **Win+D / Win+TAB / 单按 Win**：按键（带 `META_META_ON`）完整派发到前台应用，系统不再"显示桌面"/弹最近任务、也不再吞键；
-- 物理键盘与 adb 注入均验证通过。
+- **Alt+Tab**：开关打开时只交给远程桌面等，系统不弹最近任务、也不吞键；开关关闭时按键交回系统，由系统的「ALT TAB」快捷键逻辑处理；
+- **Win+D / Win+TAB / 单按 Win**：开关打开时按键（带 `META_META_ON`）完整派发到前台应用，系统不再"显示桌面"/弹最近任务、也不再吞键；关闭后对应组合立即恢复系统默认行为（例如关掉 Win+D 后按 Win+D 会重新弹「显示桌面」）；
+- 用物理键盘逐项验证通过。注意 **adb 注入（`input keycombination` / `sendevent`）触发不了小米的 Win 快捷键链路**，这类改动只能在物理键盘上确认。
 
+### 设置页与开关 Settings
 
+模块带一个设置页，按分组卡片列出各项开关：
 
+| 分组 | 开关         | 默认 | 说明                                                                         |
+| ---- | ------------ | ---- | ---------------------------------------------------------------------------- |
+| 通用 | 键盘透传     | 开   | 总开关。关闭后模块完全不干预按键，行为回到系统默认                           |
+| 按键 | Alt+Tab      | 开   | 只发给远程桌面，系统不弹最近任务                                             |
+| 按键 | Win 键       | 开   | 单按 Win 不弹 Dock / 快捷键菜单                                              |
+| 按键 | Win+D        | 开   | 不触发系统「显示桌面」                                                       |
+| 按键 | Win+TAB      | 开   | 不触发系统最近任务                                                           |
+| 界面 | 显示桌面图标 | 开   | 关闭后隐藏桌面图标（切 `activity-alias`，可在「设置 → 应用」里重新打开本页） |
+
+- 总开关关闭时子项自动置灰锁定；打开总开关会一并打开全部子项。
+- **改开关不需要重启**：hook 侧 500ms 节流刷新，切换后按一下键即生效。
+- 设置值保存在应用自己的 `SharedPreferences("settings")` 里。
 
 ### 截图 Screenshot
+
+![](README.assets/PixPin_2026-11-05_02-14-34.png)
 
 ![Screenshot_2023-01-18-03-08-54-671_com.microsoft.rdc.androidx](README.assets/Screenshot_2023-01-18-03-08-54-671_com.microsoft.rdc.androidx-16741303149715.jpg)
 ![Screenshot_2023-01-18-03-09-31-674_com.microsoft.rdc.androidx](README.assets/Screenshot_2023-01-18-03-09-31-674_com.microsoft.rdc.androidx.jpg)
 
 ### 第三方开源引用 Open Source License
 
-##### Apache License 2.0
+#### Apache License 2.0
 
 [KyuubiRan/EzXHelper](https://github.com/KyuubiRan/EzXHelper)

@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    package="pub.chara.hyperpadmeta"
+    android:versionCode="11"
+    android:versionName="3.1-hyperos3">
+
+    <uses-sdk android:minSdkVersion="30" android:targetSdkVersion="34" />
+
+    <application
+        android:allowBackup="false"
+        android:icon="@mipmap/ic_launcher"
+        android:label="@string/app_name"
+        android:supportsRtl="true">
+
+        <meta-data
+            android:name="xposedmodule"
+            android:value="true" />
+        <meta-data
+            android:name="xposeddescription"
+            android:value="@string/xposed_desc" />
+        <meta-data
+            android:name="xposedminversion"
+            android:value="93" />
+        <meta-data
+            android:name="xposedscope"
+            android:resource="@array/xposedscope" />
+        <!-- 模块通过 ContentProvider 向应用进程要设置（Binder，绕开 SELinux 读不到私有目录的问题） -->
+        <provider
+            android:name=".ConfigProvider"
+            android:authorities="pub.chara.hyperpadmeta.config"
+            android:exported="true" />
+
+        <!-- 真实入口：exported 便于图标隐藏后用设置/ADB 重新打开 -->
+        <activity
+            android:name=".SettingsActivity"
+            android:exported="true"
+            android:label="@string/app_name"
+            android:theme="@style/AppTheme" />
+
+        <!-- 桌面图标：单独做成 alias，便于“显示桌面图标”开关启用/禁用 -->
+        <activity-alias
+            android:name=".LauncherAlias"
+            android:exported="true"
+            android:icon="@mipmap/ic_launcher"
+            android:label="@string/app_name"
+            android:targetActivity=".SettingsActivity">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity-alias>
+    </application>
+</manifest>
