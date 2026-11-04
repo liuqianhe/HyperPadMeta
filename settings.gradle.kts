@@ -16,5 +16,5 @@ dependencyResolutionManagement {
 }
 
 include(":app")
-rootProject.name = "MiuiPadESC"
+rootProject.name = "HyperPadMeta"
 

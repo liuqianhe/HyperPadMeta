@@ -1,0 +1,21 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <!-- 键盘底板 -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M34,38 h40 a6,6 0 0 1 6,6 v16 a6,6 0 0 1 -6,6 h-40 a6,6 0 0 1 -6,-6 v-16 a6,6 0 0 1 6,-6 z" />
+
+    <!-- 键位（用背景色镂空） -->
+    <path
+        android:fillColor="#2B6CF6"
+        android:pathData="M32,44 h5 v4 h-5 z M40,44 h5 v4 h-5 z M48,44 h5 v4 h-5 z M56,44 h5 v4 h-5 z M64,44 h5 v4 h-5 z M32,51 h5 v4 h-5 z M40,51 h5 v4 h-5 z M48,51 h5 v4 h-5 z M56,51 h5 v4 h-5 z M64,51 h5 v4 h-5 z M32,58 h12 v4 h-12 z M48,58 h21 v4 h-21 z" />
+
+    <!-- Tab 箭头 -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M40,76 h16 v-5 l10,7 -10,7 v-5 h-16 z" />
+</vector>

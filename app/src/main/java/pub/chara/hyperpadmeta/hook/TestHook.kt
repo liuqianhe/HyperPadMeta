@@ -1,4 +1,4 @@
-package pub.chara.miuipadmeta.hook
+package pub.chara.hyperpadmeta.hook
 
 import android.view.KeyEvent
 import com.github.kyuubiran.ezxhelper.utils.findMethod

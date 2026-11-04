@@ -7,11 +7,11 @@ android {
     compileSdk = 33
 
     defaultConfig {
-        applicationId = "pub.chara.miuipadmeta"
+        applicationId = "pub.chara.hyperpadmeta"
         minSdk = 30
         targetSdk = 32
-        versionCode = 9
-        versionName = "2.6-hyperos3"
+        versionCode = 11
+        versionName = "3.1-hyperos3"
     }
 
     buildTypes {

@@ -1,9 +1,10 @@
-package pub.chara.miuipadmeta.hook
+package pub.chara.hyperpadmeta.hook
 
 import android.view.KeyEvent
 import com.github.kyuubiran.ezxhelper.utils.*
-import pub.chara.miuipadmeta.MyFakeList
+import pub.chara.hyperpadmeta.MyFakeList
 import de.robv.android.xposed.XposedBridge
+import pub.chara.hyperpadmeta.Config
 
 object MIUIHotkeyHooksAndroid11 : BaseHook() {
     override fun init() {
@@ -15,8 +16,8 @@ object MIUIHotkeyHooksAndroid11 : BaseHook() {
             }.hookBefore { param ->
                 run {
                     val arg1: KeyEvent = param.args[1] as KeyEvent;
-                    // alt-tab
-                    if ((arg1.isAltPressed && arg1.keyCode == 61)) {
+                    // alt-tab（受设置页开关控制）
+                    if (arg1.isAltPressed && arg1.keyCode == 61 && Config.altTabEnabled) {
                         param.result = 0L;
                     }
                 }
@@ -33,9 +34,9 @@ object MIUIHotkeyHooksAndroid11 : BaseHook() {
             findMethod("com.android.server.policy.MiuiKeyShortcutManager") {
                 name == "getEnableKsFeature"
             }.hookReturnConstant(false)
-            XposedBridge.log("MiuiPadMeta: MIUIHotkeyHooksAndroid11 success!")
+            XposedBridge.log("HyperPadMeta: MIUIHotkeyHooksAndroid11 success!")
         } catch (e: Throwable) {
-            XposedBridge.log("MiuiPadMeta: MIUIHotkeyHooksAndroid11 failed!")
+            XposedBridge.log("HyperPadMeta: MIUIHotkeyHooksAndroid11 failed!")
             XposedBridge.log(e)
         }
     }

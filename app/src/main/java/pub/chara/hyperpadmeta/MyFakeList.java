@@ -1,4 +1,4 @@
-package pub.chara.miuipadmeta;
+package pub.chara.hyperpadmeta;
 
 
 

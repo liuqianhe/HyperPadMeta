@@ -1,9 +1,11 @@
-package pub.chara.miuipadmeta.hook
+package pub.chara.hyperpadmeta.hook
 
 import android.view.KeyEvent
 import com.github.kyuubiran.ezxhelper.utils.*
-import pub.chara.miuipadmeta.MyFakeList
+import pub.chara.hyperpadmeta.MyFakeList
 import de.robv.android.xposed.XposedBridge
+import pub.chara.hyperpadmeta.Config
+import pub.chara.hyperpadmeta.KeyRules
 
 object MIUIHotkeyHooksAndroid12 : BaseHook() {
     override fun init() {
@@ -24,36 +26,39 @@ object MIUIHotkeyHooksAndroid12 : BaseHook() {
             }.hookBefore { param ->
                 run {
                     val arg1: KeyEvent = param.args[1] as KeyEvent;
-                    // meta key and alt-tab 两个放同一个hook函数里 少用一个hook函数 提高一点性能
-                    if ((arg1.isMetaPressed) || (arg1.isAltPressed && arg1.keyCode == 61)) {
+                    // 命中设置页开关的事件才放行（总开关关闭时完全不干预）
+                    if (KeyRules.shouldPassthrough(arg1)) {
                         param.result = 0L;
                     }
                 }
             }
         }catch (e:Exception){
-            XposedBridge.log("MiuiPadMeta: MIUIHotkeyHooksAndroid12 hook PhoneWindowManager.interceptKeyBeforeDispatching failed!")
+            XposedBridge.log("HyperPadMeta: MIUIHotkeyHooksAndroid12 hook PhoneWindowManager.interceptKeyBeforeDispatching failed!")
             XposedBridge.log(e)
         }
-        // disable miui hotkeys
+        // disable miui hotkeys（仅在总开关开启时干预）
         try {
             findMethod("com.android.server.policy.MiuiKeyShortcutManager") {
                 name == "getEnableKsFeature"
-            }.hookReturnConstant(false)
+            }.hookBefore { param ->
+                if (Config.masterEnabled) param.result = false
+            }
         }catch (e:Exception){
-            XposedBridge.log("MiuiPadMeta: MIUIHotkeyHooksAndroid12 hook MiuiKeyShortcutManager.getEnableKsFeature failed! (this may not impact usage depending on MIUI version.)")
+            XposedBridge.log("HyperPadMeta: MIUIHotkeyHooksAndroid12 hook MiuiKeyShortcutManager.getEnableKsFeature failed! (this may not impact usage depending on MIUI version.)")
             XposedBridge.log(e)
         }
 
-        // disable meta key handle for new HyperOS
-        // 至于win+xx快捷键，没找着在哪handle的，建议小米设置里关了得了
+        // disable meta key handle for new HyperOS（受「Win 键」开关控制：开启时不弹 Dock/快捷键菜单）
         try {
             findMethod("com.android.server.policy.BaseMiuiPhoneWindowManager") {
                 name == "handleMetaKey"
-            }.hookReturnConstant(null);
+            }.hookBefore { param ->
+                if (Config.winKeyEnabled) param.result = null
+            };
         }catch (e:Exception){
-            XposedBridge.log("MiuiPadMeta: MIUIHotkeyHooksAndroid12 hook BaseMiuiPhoneWindowManager.handleMetaKey failed! (this may not impact usage depending on MIUI version.)")
+            XposedBridge.log("HyperPadMeta: MIUIHotkeyHooksAndroid12 hook BaseMiuiPhoneWindowManager.handleMetaKey failed! (this may not impact usage depending on MIUI version.)")
             XposedBridge.log(e)
         }
-        XposedBridge.log("MiuiPadMeta: MIUIHotkeyHooksAndroid12 done!")
+        XposedBridge.log("HyperPadMeta: MIUIHotkeyHooksAndroid12 done!")
     }
 }

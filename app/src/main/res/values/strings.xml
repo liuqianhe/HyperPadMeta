@@ -1,4 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">MiuiPadMeta</string>
-    <string name="xposed_desc">在 MIUI / HyperOS（含 HyperOS 3 / Android 16，小米平板 6S Pro 实测）上恢复 Win/Meta 键，并把 Alt+Tab、Win+D、Win+TAB 透传给远程桌面：屏蔽小米系统的最近任务与显示桌面响应，避免按键被系统吞掉。</string>
+    <string name="app_name">HyperPadMeta</string>
+    <string name="app_title">HyperPadMeta</string>
+    <string name="app_subtitle">HyperOS 3 · 键盘透传</string>
+
+    <string name="group_common">通用</string>
+    <string name="item_master">键盘透传</string>
+    <string name="item_master_summary">总开关。开启会一并打开下面全部规则；关闭后模块完全不干预按键，行为回到系统默认。</string>
+
+    <string name="group_keys">按键</string>
+    <string name="item_alt_tab">Alt+Tab</string>
+    <string name="item_alt_tab_summary">只发给远程桌面，系统不再弹出最近任务。</string>
+    <string name="item_win_key">Win 键</string>
+    <string name="item_win_key_summary">单按不再弹出 Dock / 快捷键菜单，直接透传。</string>
+    <string name="item_win_d">Win+D</string>
+    <string name="item_win_d_summary">不再触发系统的「显示桌面」。</string>
+    <string name="item_win_tab">Win+TAB</string>
+    <string name="item_win_tab_summary">不再触发系统的最近任务。</string>
+
+    <string name="group_ui">界面</string>
+    <string name="item_show_icon">显示桌面图标</string>
+    <string name="item_show_icon_summary">关闭后从桌面隐藏图标，可通过「设置 → 应用 → HyperPadMeta」重新打开本页。</string>
+
+    <string name="toast_icon_hidden">桌面图标已隐藏，可从「设置 → 应用 → HyperPadMeta → 打开」重新进入</string>
+
+    <string name="settings_footer">模块只作用于系统按键分发层，不修改系统快捷键配置。\n适用 HyperOS 3 / Android 16（小米平板 6S Pro 实测）。</string>
+
+    <string name="xposed_desc">HyperOS 3 / Android 16 键盘透传：把 Alt+Tab、Win（Meta）键、Win+D、Win+TAB 直接交给远程桌面，屏蔽小米系统的最近任务与显示桌面响应，同时避免关闭快捷键开关后被系统吞键。每项可单独开关。小米平板 6S Pro 实测通过。</string>
 </resources>

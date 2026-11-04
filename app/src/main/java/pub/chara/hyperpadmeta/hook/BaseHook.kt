@@ -1,4 +1,4 @@
-package pub.chara.miuipadmeta.hook
+package pub.chara.hyperpadmeta.hook
 
 abstract class BaseHook {
     var isInit: Boolean = false
