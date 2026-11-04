@@ -1,8 +1,8 @@
 # MiuiPadMeta
 
-为MIUI设备恢复键盘Meta/Win键功能（禁用掉小米的快捷键），同时禁用Alt-Tab快捷键。这样就可以在远程桌面里用Meta键和Alt-Tab了。适配小米平板5系列以及Android12+的MIUI手机。
+为MIUI设备恢复键盘Meta/Win键功能（禁用掉小米的快捷键），同时禁用Alt-Tab快捷键。这样就可以在远程桌面里用Meta键和Alt-Tab了。适配小米平板5系列以及Android12+的MIUI手机，现已支持 HyperOS 3 / Android 16（实测小米平板6S Pro）。
 
-Restore Meta/Win key function on MIUI devices(disable Xiaomi hotkeys), and disable Alt-Tab hotkey. Allows you to use Meta and Alt-Tab key in Remote Desktop。Adapted for Xiaomi Pad 5 Series and MIUI phones with Android12+.
+Restore Meta/Win key function on MIUI devices(disable Xiaomi hotkeys), and disable Alt-Tab hotkey. Allows you to use Meta and Alt-Tab key in Remote Desktop。Adapted for Xiaomi Pad 5 Series and MIUI phones with Android12+, now working on HyperOS 3 / Android 16 (tested on Xiaomi Pad 6S Pro).
 
 
 
@@ -14,7 +14,8 @@ Restore Meta/Win key function on MIUI devices(disable Xiaomi hotkeys), and disab
 | MIUI13 Android11   | √ **         | √           |
 | MIUI13 Android12   | √          | √           |
 | MIUI14 Android13   | √          | √           |
-| HyperOS         | √? ****       | √? ***        |
+| HyperOS（1/2，未测）| √? ****       | √? ***        |
+| **HyperOS 3 Android16** | **√**      | **√**       |
 | 非MIUI系统         | N/A        | ? ***        |
 
 √ 表示经过测试，目前支持
@@ -29,7 +30,7 @@ Restore Meta/Win key function on MIUI devices(disable Xiaomi hotkeys), and disab
 >
 > ***禁用Alt-Tab理论上在所有Android系统上支持。
 >
-> **** 小米在HyperOS加强了对Bootloader权限的管控，我暂未将我的Xiaomi Pad 5 Pro设备更新到HyperOS，所以无法测试。
+> **HyperOS 3 / Android 16 已在小米平板6S Pro（OS3.0.304.0.WNXCNXM）上实测通过**。
 >
 > [DisableAltTab](https://modules.lsposed.org/module/pub.chara.disablealttab) 模块为独立出来的禁用Alt-Tab功能，适配所有Android设备。
 
@@ -49,7 +50,7 @@ Restore Meta/Win key function on MIUI devices(disable Xiaomi hotkeys), and disab
 
 红米K50 MIUI稳定版14.0.4 Android13
 
-
+小米平板6S Pro HyperOS 3.0 OS3.0.304.0.WNXCNXM Android16
 
 ### 鸣谢 Special thanks
 
@@ -97,6 +98,23 @@ Restore Meta/Win key function on MIUI devices(disable Xiaomi hotkeys), and disab
 部分功能（如按下Meta唤出Dock栏）放到了`com.android.server.policy.BaseMiuiPhoneWindowManager.handleMetaKey`里处理（在miui-services.jar）
 
 win+xx快捷键，没找着在哪handle的，建议小米设置里关了得了
+
+#### HyperOS 3 / Android 16（新增适配）
+
+在 HyperOS 3 上，Alt-Tab 被小米自己的 `BaseMiuiPhoneWindowManager` 子类在更早阶段接管：
+
+- `BaseMiuiPhoneWindowManager.interceptKeyBeforeDispatching(IBinder, KeyEvent, int)` 重写了 AOSP 父类，内部调用私有的 `handleAltTab(KeyEvent)` 通知系统弹最近任务，但**不消费按键**（系统与远程桌面同时响应 → 双响应）；
+- 关闭「设置 → 手写笔与键盘 → 键盘 → 自定义快捷键 → ALT TAB」开关时，该键在小米这层被直接吞掉（远程收不到）；
+- 旧模块用来禁用整套小米快捷键的 `MiuiKeyShortcutManager` 类已被删除，原 hook 整体失效。
+
+适配方式（见 `hook/HyperOSAltTabHooks.kt`，SDK ≥ 35 时由 `MainHook` 装载）：对以下方法做 before hook，Alt+Tab 分支一律短路放行，让按键只交给前台/远程桌面：
+
+1. `BaseMiuiPhoneWindowManager.interceptKeyBeforeDispatching` → `param.result = 0L`
+2. AOSP `PhoneWindowManager.interceptKeyBeforeDispatching` → `param.result = 0L`
+3. `BaseMiuiPhoneWindowManager.handleAltTab(KeyEvent)` → `param.result = null`
+4. `BaseMiuiPhoneWindowManager.handleMetaKey(KeyEvent)` → `param.result = null`
+
+实测（小米平板6S Pro，HyperOS 3 / Android 16）：无论「ALT TAB」开关开/关，Alt+Tab 都只交给远程桌面，系统不再弹最近任务、也不屏蔽按键。物理键盘与 adb 注入均验证通过。
 
 
 

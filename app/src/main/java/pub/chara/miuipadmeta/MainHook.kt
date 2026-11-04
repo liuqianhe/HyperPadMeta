@@ -23,9 +23,14 @@ class MainHook : IXposedHookLoadPackage {
             if (Build.VERSION.SDK_INT <= Build.VERSION_CODES.R) {
                 XposedBridge.log("MiuiPadMeta: Using Android 11 hooks.")
                 initHooks(MIUIHotkeyHooksAndroid11)
-            } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            } else {
                 XposedBridge.log("MiuiPadMeta: Using Android 12+ hooks.")
                 initHooks(MIUIHotkeyHooksAndroid12)
+                // HyperOS 2/3: 小米自己的 Alt+Tab 链路，需要额外的 hook
+                if (Build.VERSION.SDK_INT >= 35) {
+                    XposedBridge.log("MiuiPadMeta: Using HyperOS / Android 15+ hooks.")
+                    initHooks(HyperOSAltTabHooks)
+                }
             }
 
 //            initHooks(TestHook())

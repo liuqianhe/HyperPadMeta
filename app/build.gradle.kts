@@ -4,14 +4,14 @@ plugins {
 }
 
 android {
-    compileSdk = 32
+    compileSdk = 33
 
     defaultConfig {
         applicationId = "pub.chara.miuipadmeta"
         minSdk = 30
         targetSdk = 32
-        versionCode = 7
-        versionName = "2.4"
+        versionCode = 8
+        versionName = "2.5-hyperos3"
     }
 
     buildTypes {
