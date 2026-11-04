@@ -101,20 +101,33 @@ win+xx快捷键，没找着在哪handle的，建议小米设置里关了得了
 
 #### HyperOS 3 / Android 16（新增适配）
 
-在 HyperOS 3 上，Alt-Tab 被小米自己的 `BaseMiuiPhoneWindowManager` 子类在更早阶段接管：
+在 HyperOS 3 上，Alt-Tab 与 Win 键都被小米自己的 `BaseMiuiPhoneWindowManager` 子类 / 快捷键规则系统在更早阶段接管：
+
+**Alt+Tab：**
 
 - `BaseMiuiPhoneWindowManager.interceptKeyBeforeDispatching(IBinder, KeyEvent, int)` 重写了 AOSP 父类，内部调用私有的 `handleAltTab(KeyEvent)` 通知系统弹最近任务，但**不消费按键**（系统与远程桌面同时响应 → 双响应）；
-- 关闭「设置 → 手写笔与键盘 → 键盘 → 自定义快捷键 → ALT TAB」开关时，该键在小米这层被直接吞掉（远程收不到）；
+- 关闭「设置 → 手写笔与键盘 → 键盘 → 自定义快捷键 → ALT TAB」开关时，该键在小米这层被直接吞掉（远程收不到）。
+
+**Win 键（Win+D / Win+TAB / Win+方向等）：**
+
+- 这些组合由 `MiuiKeyShortcutRuleManager` 注册为 `KeyboardCombinationRule`（继承 `KeyCombinationManager$TwoKeysCombinationRule`），交给 `KeyCombinationManager` 判定；
+- `KeyboardCombinationRule.shouldInterceptKeys()` 只按 primaryKey + metaState 精确匹配就返回 true 拦截，**不看快捷键是否 enable** —— 无论「Win D / Win TAB」开关开/关，带 meta 的按键都会被消费/吞掉；
 - 旧模块用来禁用整套小米快捷键的 `MiuiKeyShortcutManager` 类已被删除，原 hook 整体失效。
 
-适配方式（见 `hook/HyperOSAltTabHooks.kt`，SDK ≥ 35 时由 `MainHook` 装载）：对以下方法做 before hook，Alt+Tab 分支一律短路放行，让按键只交给前台/远程桌面：
+适配方式（见 `hook/HyperOSAltTabHooks.kt`，SDK ≥ 35 时由 `MainHook` 装载）：对以下方法做 before hook，Alt+Tab 与任何带 Win 修饰（`META_META_ON`）的事件一律短路放行，让按键只交给前台/远程桌面：
 
-1. `BaseMiuiPhoneWindowManager.interceptKeyBeforeDispatching` → `param.result = 0L`
+1. `BaseMiuiPhoneWindowManager.interceptKeyBeforeDispatching` → `param.result = 0L`（Alt+Tab 或 Meta/Win）
 2. AOSP `PhoneWindowManager.interceptKeyBeforeDispatching` → `param.result = 0L`
 3. `BaseMiuiPhoneWindowManager.handleAltTab(KeyEvent)` → `param.result = null`
-4. `BaseMiuiPhoneWindowManager.handleMetaKey(KeyEvent)` → `param.result = null`
+4. `BaseMiuiPhoneWindowManager.handleMetaKey(KeyEvent)` → `param.result = null`（单按 Win 不弹 Dock）
+5. `KeyboardCombinationRule.shouldInterceptKeys(int, int)` → 带 `META_META_ON` 时返回 `false`（不拦截 Win 组合）
+6. `KeyCombinationManager.isKeyConsumed` / `shouldConsumedKey` → 对 Win 事件返回 `false`（兜底）
 
-实测（小米平板6S Pro，HyperOS 3 / Android 16）：无论「ALT TAB」开关开/关，Alt+Tab 都只交给远程桌面，系统不再弹最近任务、也不屏蔽按键。物理键盘与 adb 注入均验证通过。
+实测（小米平板6S Pro，HyperOS 3 / Android 16）：
+
+- **Alt+Tab**：无论开关开/关，都只交给远程桌面，系统不再弹最近任务、也不屏蔽按键；
+- **Win+D / Win+TAB / 单按 Win**：按键（带 `META_META_ON`）完整派发到前台应用，系统不再"显示桌面"/弹最近任务、也不再吞键；
+- 物理键盘与 adb 注入均验证通过。
 
 
 

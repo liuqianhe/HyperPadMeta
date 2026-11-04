@@ -6,50 +6,99 @@ import com.github.kyuubiran.ezxhelper.utils.hookBefore
 import de.robv.android.xposed.XposedBridge
 
 /**
- * HyperOS 2/3 (Android 15+) 适配。
+ * HyperOS 2/3 (Android 15+) 适配：Alt+Tab 与 Meta/Win 键（Win+D / Win+TAB）透传远程桌面。
  *
- * 小米在 BaseMiuiPhoneWindowManager 里重写了 interceptKeyBeforeDispatching，
+ * 一、Alt+Tab：小米在 BaseMiuiPhoneWindowManager 里重写了 interceptKeyBeforeDispatching，
  * 并在其中调用私有 handleAltTab()：命中 Alt+Tab 时通过
  * InputManagerServiceStubImpl.notifyKeyboardShortcutKey("KEY_TAB", "SHOW_RECENT_APPS")
- * 通知系统弹出最近任务，却不消费按键 —— 于是系统和应用（远程桌面）同时响应。
- * 当设置里关闭 ALT TAB 规则时，同一方法的策略分支又会把按键直接吞掉。
+ * 通知系统弹出最近任务，却不消费按键 —— 系统和应用（远程桌面）同时响应；
+ * 关闭 ALT TAB 规则时又会把按键直接吞掉。旧模块只 hook 了 AOSP 父类，管不到子类。
  *
- * 旧模块只 hook 了 AOSP 父类 PhoneWindowManager.interceptKeyBeforeDispatching，
- * 而小米子类多数分支直接 return 不调用 super，所以完全管不到这条链路。
+ * 二、Meta/Win：Win+D、Win+TAB 等由 MiuiKeyShortcutRuleManager 注册成 KeyboardCombinationRule
+ * （继承 KeyCombinationManager$TwoKeysCombinationRule），交给 KeyCombinationManager 判定。
+ * KeyboardCombinationRule.shouldInterceptKeys() 只按 primaryKey + metaState 精确匹配就返回 true
+ * 拦截，**不看快捷键是否 enable**，所以开关开/关都会被消费/吞掉。
  *
- * 这里在小米子类方法的最前面短路 Alt+Tab：直接返回 0L（不拦截），
- * 一次同时做到：不触发 handleAltTab、不进入吞键分支、不调用 super。
+ * 处理方式：
+ *  1. 在小米子类 interceptKeyBeforeDispatching 最前面，对 Alt+Tab 和任何 Meta/Win 事件返回 0L
+ *     （不拦截 → 原样派发给前台应用；同时不触发 handleAltTab、不进入吞键分支、不调用 super）。
+ *  2. handleAltTab 固定返回 null，防御性阻止弹最近任务。
+ *  3. KeyboardCombinationRule.shouldInterceptKeys 对带 META_META_ON 的事件返回 false，
+ *     KeyCombinationManager 便不把 Win 组合判为消费/拦截。
+ *  4. 兜底：KeyCombinationManager.isKeyConsumed / shouldConsumedKey 对 Meta 事件返回 false。
+ *
+ * 注意：handleMetaKey（单按 Win 弹 Dock）由 Android12+ hooks 已固定返回 null，这里不重复。
  */
 object HyperOSAltTabHooks : BaseHook() {
+
+    private const val MIUI_PWM = "com.android.server.policy.BaseMiuiPhoneWindowManager"
+    private const val KEY_COMBO_RULE = "com.android.server.policy.KeyboardCombinationRule"
+    private const val KEY_COMBO_MANAGER = "com.android.server.policy.KeyCombinationManager"
+
     override fun init() {
-        // 主 hook：短路小米子类的分发逻辑
+        val log = { msg: String -> XposedBridge.log("MiuiPadMeta: $msg") }
+
+        // 1) 小米子类分发：Alt+Tab 或任何 Meta/Win 事件一律放行（返回 0L）
         try {
-            findMethod("com.android.server.policy.BaseMiuiPhoneWindowManager") {
-                name == "interceptKeyBeforeDispatching"
-            }.hookBefore { param ->
+            findMethod(MIUI_PWM) { name == "interceptKeyBeforeDispatching" }.hookBefore { param ->
                 val event = param.args.getOrNull(1) as? KeyEvent ?: return@hookBefore
-                if (event.isAltPressed && event.keyCode == KeyEvent.KEYCODE_TAB) {
+                val isAltTab = event.isAltPressed && event.keyCode == KeyEvent.KEYCODE_TAB
+                val isMeta = event.keyCode == KeyEvent.KEYCODE_META_LEFT ||
+                        event.keyCode == KeyEvent.KEYCODE_META_RIGHT ||
+                        event.isMetaPressed
+                if (isAltTab || isMeta) {
                     // 0L = 不拦截，事件原样派发给前台应用
                     param.result = 0L
                 }
             }
-            XposedBridge.log("MiuiPadMeta: HyperOS interceptKeyBeforeDispatching hooked")
+            log("HyperOS interceptKeyBeforeDispatching hooked")
         } catch (e: Throwable) {
-            XposedBridge.log("MiuiPadMeta: HyperOS interceptKeyBeforeDispatching hook failed!")
+            log("HyperOS interceptKeyBeforeDispatching hook failed!")
             XposedBridge.log(e)
         }
 
-        // 冗余保险：即使上面的短路被绕过，也不让小米通知系统弹最近任务
+        // 2) 冗余保险：即使上面的短路被绕过，也不让小米通知系统弹最近任务
         try {
-            findMethod("com.android.server.policy.BaseMiuiPhoneWindowManager") {
-                name == "handleAltTab"
-            }.hookBefore { param ->
+            findMethod(MIUI_PWM) { name == "handleAltTab" }.hookBefore { param ->
                 param.result = null
             }
-            XposedBridge.log("MiuiPadMeta: HyperOS handleAltTab hooked")
+            log("HyperOS handleAltTab hooked")
         } catch (e: Throwable) {
-            XposedBridge.log("MiuiPadMeta: HyperOS handleAltTab hook failed!")
+            log("HyperOS handleAltTab hook failed!")
             XposedBridge.log(e)
+        }
+
+        // 3) Win 组合键核心：shouldInterceptKeys 对带 Win 修饰的事件返回 false（不拦截）
+        try {
+            findMethod(KEY_COMBO_RULE) { name == "shouldInterceptKeys" }.hookBefore { param ->
+                val metaState = param.args.getOrNull(1) as? Int ?: return@hookBefore
+                if (metaState and KeyEvent.META_META_ON != 0) {
+                    param.result = false
+                }
+            }
+            log("HyperOS KeyboardCombinationRule.shouldInterceptKeys hooked")
+        } catch (e: Throwable) {
+            log("HyperOS shouldInterceptKeys hook failed!")
+            XposedBridge.log(e)
+        }
+
+        // 4) 兜底：KeyCombinationManager 不把 Win 事件判为已消费
+        for (methodName in listOf("isKeyConsumed", "shouldConsumedKey")) {
+            try {
+                findMethod(KEY_COMBO_MANAGER) { name == methodName }.hookBefore { param ->
+                    val event = param.args.getOrNull(0) as? KeyEvent ?: return@hookBefore
+                    if (event.keyCode == KeyEvent.KEYCODE_META_LEFT ||
+                        event.keyCode == KeyEvent.KEYCODE_META_RIGHT ||
+                        event.isMetaPressed
+                    ) {
+                        param.result = false
+                    }
+                }
+                log("HyperOS KeyCombinationManager.$methodName hooked")
+            } catch (e: Throwable) {
+                log("HyperOS KeyCombinationManager.$methodName hook failed!")
+                XposedBridge.log(e)
+            }
         }
     }
 }

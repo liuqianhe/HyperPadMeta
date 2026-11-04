@@ -1,4 +1,4 @@
 <resources>
     <string name="app_name">MiuiPadMeta</string>
-    <string name="xposed_desc">Restore Meta/Win key and pass Alt-Tab through to remote desktop on MIUI/HyperOS, including HyperOS 3 / Android 16 (tested on Xiaomi Pad 6S Pro).</string>
+    <string name="xposed_desc">在 MIUI / HyperOS（含 HyperOS 3 / Android 16，小米平板 6S Pro 实测）上恢复 Win/Meta 键，并把 Alt+Tab、Win+D、Win+TAB 透传给远程桌面：屏蔽小米系统的最近任务与显示桌面响应，避免按键被系统吞掉。</string>
 </resources>
