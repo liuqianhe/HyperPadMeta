@@ -24,7 +24,14 @@
 
     <string name="toast_icon_hidden">桌面图标已隐藏，可从「设置 → 应用 → HyperPadMeta → 打开」重新进入</string>
 
-    <string name="settings_footer">模块只作用于系统按键分发层，不修改系统快捷键配置。\n适用 HyperOS 3 / Android 16（小米平板 6S Pro 实测）。</string>
+    <!-- 关于页 -->
+    <string name="about_title">关于</string>
+    <string name="about_back">返回</string>
+    <string name="about_version">版本 %1$s (%2$d)</string>
+    <string name="about_github">GitHub</string>
+    <string name="about_docs">文档</string>
+    <string name="about_note">模块只作用于系统按键分发层，不修改系统快捷键配置。\n适用 HyperOS 3 / Android 16（目前仅测试小米平板 6S Pro）。</string>
+    <string name="about_link_failed">没有可打开链接的应用</string>
 
     <string name="xposed_desc">HyperOS 3 / Android 16 键盘透传：把 Alt+Tab、Win（Meta）键、Win+D、Win+TAB 直接交给远程桌面，屏蔽小米系统的最近任务与显示桌面响应，同时避免关闭快捷键开关后被系统吞键。每项可单独开关。小米平板 6S Pro 实测通过。</string>
 </resources>

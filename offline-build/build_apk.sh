@@ -14,6 +14,9 @@ set -e
 
 HBM="$(cd "$(dirname "$0")" && pwd)"
 HB="$(cygpath -m "$HBM" 2>/dev/null || echo "$HBM")"
+# 仓库根（签名密钥在 <repo>/keystore/，不在 offline-build/ 里）
+ROOTM="$(cd "$HBM/.." && pwd)"
+ROOT="$(cygpath -m "$ROOTM" 2>/dev/null || echo "$ROOTM")"
 
 ANDROID_HOME="${ANDROID_HOME:-C:/Paths/Android_Path}"
 ANDROID_JAR="${ANDROID_JAR:-$ANDROID_HOME/platforms/android-36/android.jar}"
@@ -25,8 +28,19 @@ JAR="$JAVA_HOME/bin/jar"
 export JAVA_HOME
 KEYTOOL="$JAVA_HOME/bin/keytool"
 
-KS="${KS:-$HB/mykey.jks}"
+# 正式发布密钥（jks 入库，密码不入库）：keystore/hyperpadmeta-release.jks
+# 密码来源优先级：环境变量 HP_KS_PASS > keystore/pass.txt > 旧的 mykey.jks（android/android）
+KS="${KS:-$ROOT/keystore/hyperpadmeta-release.jks}"
+KS_ALIAS="${KS_ALIAS:-hyperpadmeta}"
 OUT="$HB/build/HyperPadMeta-HyperOS3.apk"
+
+if [ -n "$HP_KS_PASS" ]; then
+  KS_PASS="$HP_KS_PASS"
+elif [ -f "$ROOT/keystore/pass.txt" ]; then
+  KS_PASS="$(tr -d '\r\n' < "$ROOT/keystore/pass.txt")"
+else
+  KS_PASS="android"
+fi
 
 echo "== 1. aapt2 编译资源 =="
 rm -rf "$HB/out" "$HB/build"
@@ -62,12 +76,15 @@ echo "== 6. zipalign =="
 "$BT/zipalign" -p 4 "$HB/build/base.apk" "$HB/build/aligned.apk"
 ls -l "$HB/build/aligned.apk"
 
-echo "== 7. 签名（无 keystore 则生成；不要在仓库里提交 jks）=="
+echo "== 7. 签名（jks 在 keystore/，密码见 doc/HyperPadMeta签名密钥.md）=="
 if [ ! -f "$KS" ]; then
-  "$KEYTOOL" -genkeypair -v -keystore "$KS" -alias mp -keyalg RSA -keysize 2048 -validity 10000 \
-    -storepass android -keypass android -dname "CN=HyperPadMeta" >/dev/null 2>&1
+  echo "缺少签名密钥：$KS" >&2
+  echo "重新生成：keytool -genkeypair -keystore keystore/hyperpadmeta-release.jks -storetype PKCS12 \\" >&2
+  echo "  -alias hyperpadmeta -keyalg RSA -keysize 4096 -validity 10000 -dname \"CN=HyperPadMeta, O=HyperPadMeta, C=CN\"" >&2
+  exit 1
 fi
-"$JAVA" -jar "$BT/lib/apksigner.jar" sign --ks "$KS" --ks-pass pass:android --key-pass pass:android \
+"$JAVA" -jar "$BT/lib/apksigner.jar" sign --ks "$KS" --ks-key-alias "$KS_ALIAS" \
+  --ks-pass "pass:$KS_PASS" --key-pass "pass:$KS_PASS" \
   --out "$OUT" "$HB/build/aligned.apk"
 
 echo "== 8. 校验 =="

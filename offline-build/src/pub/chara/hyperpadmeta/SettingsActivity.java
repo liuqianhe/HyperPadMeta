@@ -2,6 +2,7 @@ package pub.chara.hyperpadmeta;
 
 import android.app.Activity;
 import android.content.ComponentName;
+import android.content.Intent;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 import android.content.res.Configuration;
@@ -97,13 +98,38 @@ public class SettingsActivity extends Activity {
         root.setPadding(dp(24), dp(28), dp(24), dp(40));
         scroll.addView(root, new ScrollView.LayoutParams(MATCH, WRAP));
 
-        // ---- 页头 ----
+        // ---- 页头（标题 + 右上角「关于」） ----
+        LinearLayout header = new LinearLayout(this);
+        header.setOrientation(LinearLayout.HORIZONTAL);
+        header.setGravity(Gravity.CENTER_VERTICAL);
+        root.addView(header, wrapLp());
+
         TextView title = new TextView(this);
         title.setText(R.string.app_title);
         title.setTextSize(TypedValue.COMPLEX_UNIT_SP, 30);
         title.setTextColor(getColor(R.color.text_primary));
         title.setTypeface(Typeface.DEFAULT_BOLD);
-        root.addView(title, wrapLp());
+        header.addView(title, new LinearLayout.LayoutParams(0, WRAP, 1f));
+
+        TextView about = new TextView(this);
+        about.setText(R.string.about_title);
+        about.setTextSize(TypedValue.COMPLEX_UNIT_SP, 13);
+        about.setTextColor(getColor(R.color.accent));
+        about.setGravity(Gravity.CENTER);
+        about.setPadding(dp(16), dp(8), dp(16), dp(8));
+        GradientDrawable aboutBg = new GradientDrawable();
+        aboutBg.setCornerRadius(dp(16));
+        aboutBg.setColor(0x1F3482FF);
+        aboutBg.setStroke(Math.max(1, dp(0.5f)), 0x333482FF);
+        about.setBackground(aboutBg);
+        about.setClickable(true);
+        about.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                startActivity(new Intent(SettingsActivity.this, AboutActivity.class));
+            }
+        });
+        header.addView(about, new LinearLayout.LayoutParams(WRAP, WRAP));
 
         TextView subtitle = new TextView(this);
         subtitle.setText(R.string.app_subtitle);
@@ -163,16 +189,7 @@ public class SettingsActivity extends Activity {
                     }
                 }, false);
 
-        // ---- 页脚 ----
-        TextView footer = new TextView(this);
-        footer.setText(R.string.settings_footer);
-        footer.setTextSize(TypedValue.COMPLEX_UNIT_SP, 12);
-        footer.setTextColor(getColor(R.color.text_secondary));
-        footer.setLineSpacing(dp(2), 1f);
-        LinearLayout.LayoutParams footLp = wrapLp();
-        footLp.topMargin = dp(28);
-        footLp.leftMargin = dp(4);
-        root.addView(footer, footLp);
+        // 页脚说明（「模块只作用于系统按键分发层…」）已移到「关于」页
 
         return scroll;
     }

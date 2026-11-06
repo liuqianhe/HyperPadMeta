@@ -10,12 +10,29 @@ android {
         applicationId = "pub.chara.hyperpadmeta"
         minSdk = 30
         targetSdk = 32
-        versionCode = 11
-        versionName = "3.1-hyperos3"
+        versionCode = 12
+        versionName = "3.2-hyperos3"
+    }
+
+    // 正式发布密钥：keystore/hyperpadmeta-release.jks（jks 入库，密码不入库）
+    // 密码来源：keystore/pass.txt（本地，已 gitignore）或环境变量 HP_KS_PASS
+    signingConfigs {
+        create("release") {
+            val ks = rootProject.file("keystore/hyperpadmeta-release.jks")
+            val passFile = rootProject.file("keystore/pass.txt")
+            if (ks.exists()) {
+                storeFile = ks
+                keyAlias = "hyperpadmeta"
+                storePassword = passFile.takeIf { it.exists() }?.readText()?.trim()
+                    ?: System.getenv("HP_KS_PASS")
+                keyPassword = storePassword
+            }
+        }
     }
 
     buildTypes {
         named("release") {
+            signingConfig = signingConfigs.findByName("release")
             isShrinkResources = true
             isMinifyEnabled = true
             proguardFiles("proguard-rules.pro")

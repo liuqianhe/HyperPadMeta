@@ -38,8 +38,6 @@
 ### 已知冲突 Known conflicts
 
 **Xposed Edge ProMax（`com.jozein.xedgepro`）**：开启它的「按键」功能后会自己注册一遍按键监听，与本模块抢事件 ——
-表现为普通键位被吞（连打 `note` 变 `nte`）、`Ctrl` / `Tab` / `Shift` 单击不响应、
-`Alt+Tab` / `Win+Tab` 要短时间内按两次才触发（改本模块的代码或开关都无效）。
 用本模块时请在 Xposed Edge ProMax 里关掉「按键」，或直接在 LSPosed 里停用该模块。
 
 ### 鸣谢 Special thanks
@@ -104,23 +102,23 @@ HyperOS 3 上这些组合由 `MiuiKeyShortcutRuleManager` 注册成 `KeyboardCom
 
 1. `BaseMiuiPhoneWindowManager.interceptKeyBeforeDispatching` → `param.result = 0L`（Alt+Tab / Meta 键 / Win 组合，按对应开关）
 2. AOSP `PhoneWindowManager.interceptKeyBeforeDispatching` → `param.result = 0L`
-3. `BaseMiuiPhoneWindowManager.handleAltTab(KeyEvent)` → `param.result = null`（受「Alt+Tab」开关控制）
+3. `BaseMiuiPhoneWindowManager.handleAltTab(KeyEvent)` → `param.result = null`（按事件命中：`Alt+TAB` 看「Alt+Tab」开关，`Win+TAB` 看「Win+TAB」开关）
 4. `BaseMiuiPhoneWindowManager.handleMetaKey(KeyEvent)` → `param.result = null`（受「Win 键」开关控制，单按 Win 不弹 Dock）
 5. `KeyboardCombinationRule.shouldInterceptKeys(int, int)` → 命中项返回 `false`（不拦截 Win 组合）
 6. `KeyCombinationManager.isKeyConsumed` / `shouldConsumedKey` → 命中项返回 `false`（兜底）
 7. `MiuiKeyInterceptExtend.getKeyInterceptType(BeforeQueueing|BeforeDispatching)` → 命中项返回 `1`
 
-第 7 条是`Win+Tab`「系统和远程同时响应」的根治点。这个方法的返回值不是「拦 / 不拦」的布尔量：
+第 7 条按「策略类型」判定，这个返回值不是布尔量：
 
-- `0` / `TYPE_INTERCEPT_NULL`：没有特殊类型，**继续走完整条 MIUI 处理链**；
-- `1` / `TYPE_INTERCEPT_MIUI_AND_AOSP`：立刻 `pass the key to app` 并 `return`，系统不再处理；
+- `0` / `TYPE_INTERCEPT_NULL`：无特殊类型，继续走后续 MIUI 处理链；
+- `1` / `TYPE_INTERCEPT_MIUI_AND_AOSP`：直接 `pass the key to app` 并 `return`，目标键取这个值；
 - `2` / `TYPE_INTERCEPT_AOSP`：交给 AOSP 父类处理；
 - `4` / `TYPE_INTERCEPT_MIUI_AND_AOSP_NO_PASS_TO_USER`：消费掉，不给应用。
 
-早期版本在这里返回 `0`（本意是「不拦截」），结果 dispatching 继续执行了 `handleAltTab()` ——
-而 `handleAltTab()` 对按住 Win 的 TAB 正是发 `notifyKeyboardShortcutKey("KEY_TAB", "SHOW_RECENT_APPS")`
-弹最近任务，于是远程桌面收到 Win+Tab 的同时安卓也弹了一次任务切换。
-改成返回 `1` 后，queueing 与 dispatching 两条链都在最前面 `return`，系统完全不再响应。
+命中条件同第 1、3、4 条：单按 `Meta` 看「Win 键」开关，`Alt+TAB` 看「Alt+Tab」开关，
+带 `META_META_ON` 的 `Win+D` / `Win+TAB` 看各自开关，其余 Win 组合看总开关；
+电源键与音量键不参与。两个两参包装方法可能被内联，因此对四参的
+`getKeyInterceptType(INTERCEPT_STAGE, KeyEvent, int, WindowState)` 也做一层兜底 hook。
 
 实测（小米平板6S Pro，HyperOS 3 / Android 16）：
 

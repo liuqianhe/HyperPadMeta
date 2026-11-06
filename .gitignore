@@ -14,3 +14,5 @@ local.properties
 *.jar.cache
 *.apk.cache
 /developmentData
+# 签名密钥：jks 入库，密码放 keystore/pass.txt（不入库）
+/keystore/pass.txt
