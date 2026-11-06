@@ -34,6 +34,19 @@ public class ConfigProvider extends ContentProvider {
         b.putBoolean("win_key", p.getBoolean("win_key", true));
         b.putBoolean("win_d", p.getBoolean("win_d", true));
         b.putBoolean("win_tab", p.getBoolean("win_tab", true));
+        // 小米预制快捷键（miuishortcuts.xml）：Win+W 关窗口 / N 通知中心 / M 控制中心 /
+        // A 截全屏 / Shift+A 区域截屏 / L 锁屏
+        b.putBoolean("win_w", p.getBoolean("win_w", true));
+        b.putBoolean("win_n", p.getBoolean("win_n", true));
+        b.putBoolean("win_m", p.getBoolean("win_m", true));
+        b.putBoolean("win_a", p.getBoolean("win_a", true));
+        b.putBoolean("win_shift_a", p.getBoolean("win_shift_a", true));
+        b.putBoolean("win_l", p.getBoolean("win_l", true));
+        // 应用白名单：scope_all=false 时，只有 scope_pkgs 里的应用才替换小米快捷键
+        b.putBoolean("scope_all", p.getBoolean("scope_all", true));
+        java.util.Set<String> pkgs = p.getStringSet("scope_pkgs", null);
+        b.putStringArray("scope_pkgs", pkgs == null
+                ? new String[0] : pkgs.toArray(new String[0]));
         return b;
     }
 

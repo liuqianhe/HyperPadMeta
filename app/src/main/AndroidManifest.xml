@@ -2,6 +2,16 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     package="pub.chara.hyperpadmeta">
 
+    <!-- 「选择应用」要列出所有可启动应用：targetSdk 30+ 必须声明包可见性 -->
+    <uses-permission android:name="android.permission.QUERY_ALL_PACKAGES" />
+
+    <queries>
+        <intent>
+            <action android:name="android.intent.action.MAIN" />
+            <category android:name="android.intent.category.LAUNCHER" />
+        </intent>
+    </queries>
+
     <application
         android:allowBackup="false"
         android:icon="@mipmap/ic_launcher"
@@ -49,6 +59,14 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity-alias>
+        <!-- 选择应用页（设置页「选择应用」进入） -->
+        <activity
+            android:name=".AppPickerActivity"
+            android:exported="false"
+            android:label="@string/picker_title"
+            android:windowSoftInputMode="adjustResize"
+            android:theme="@style/AppTheme" />
+
         <!-- 关于页（设置页右上角进入） -->
         <activity
             android:name=".AboutActivity"

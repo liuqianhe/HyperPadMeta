@@ -31,6 +31,18 @@ object Config {
     const val KEY_WIN_D = "win_d"
     const val KEY_WIN_TAB = "win_tab"
 
+    /** 小米预制快捷键（/data/system/miuishortcuts.xml），逐项可关。 */
+    const val KEY_WIN_W = "win_w"
+    const val KEY_WIN_N = "win_n"
+    const val KEY_WIN_M = "win_m"
+    const val KEY_WIN_A = "win_a"
+    const val KEY_WIN_SHIFT_A = "win_shift_a"
+    const val KEY_WIN_L = "win_l"
+    const val KEY_SCOPE_ALL = "scope_all"
+    const val KEY_SCOPE_PKGS = "scope_pkgs"
+
+    private const val BOOL_COUNT = 12
+
     private const val THROTTLE_MS = 500L
 
     @Volatile
@@ -53,12 +65,54 @@ object Config {
     var winTab = true
         private set
 
-    /** 子项统一再与总开关取与，总开关关闭 = 模块完全不干预。 */
-    val altTabEnabled: Boolean get() { refresh(); return master && altTab }
-    val winKeyEnabled: Boolean get() { refresh(); return master && winKey }
-    val winDEnabled: Boolean get() { refresh(); return master && winD }
-    val winTabEnabled: Boolean get() { refresh(); return master && winTab }
-    val masterEnabled: Boolean get() { refresh(); return master }
+    @Volatile
+    var winW = true
+        private set
+
+    @Volatile
+    var winN = true
+        private set
+
+    @Volatile
+    var winM = true
+        private set
+
+    @Volatile
+    var winA = true
+        private set
+
+    @Volatile
+    var winShiftA = true
+        private set
+
+    @Volatile
+    var winL = true
+        private set
+
+    /** 全部应用生效；为 false 时只有 [scopePkgs] 里的应用才替换小米快捷键。 */
+    @Volatile
+    var scopeAll = true
+        private set
+
+    @Volatile
+    var scopePkgs: Set<String> = emptySet()
+        private set
+
+    /**
+     * 子项统一再与总开关、前台应用作用域取与：
+     * 总开关关闭 = 模块完全不干预；不在白名单里的应用 = 保持小米默认行为。
+     */
+    val altTabEnabled: Boolean get() { refresh(); return master && altTab && Foreground.inScope() }
+    val winKeyEnabled: Boolean get() { refresh(); return master && winKey && Foreground.inScope() }
+    val winDEnabled: Boolean get() { refresh(); return master && winD && Foreground.inScope() }
+    val winTabEnabled: Boolean get() { refresh(); return master && winTab && Foreground.inScope() }
+    val winWEnabled: Boolean get() { refresh(); return master && winW && Foreground.inScope() }
+    val winNEnabled: Boolean get() { refresh(); return master && winN && Foreground.inScope() }
+    val winMEnabled: Boolean get() { refresh(); return master && winM && Foreground.inScope() }
+    val winAEnabled: Boolean get() { refresh(); return master && winA && Foreground.inScope() }
+    val winShiftAEnabled: Boolean get() { refresh(); return master && winShiftA && Foreground.inScope() }
+    val winLEnabled: Boolean get() { refresh(); return master && winL && Foreground.inScope() }
+    val masterEnabled: Boolean get() { refresh(); return master && Foreground.inScope() }
 
     @Volatile
     private var lastRead = 0L
@@ -77,6 +131,9 @@ object Config {
 
     private var sharedPrefs: XSharedPreferences? = null
 
+    /** readFromProvider / readFromPrefs 读到的白名单，refresh 里统一赋值。 */
+    private var pendingPkgs: Set<String> = emptySet()
+
     /**
      * 刷新开关值（默认 500ms 节流）。返回当前是否处于“总开关打开”状态。
      * 注意 [systemContext] 失败不缓存：system_server 早期 IActivityManager 可能还没就绪，
@@ -88,7 +145,7 @@ object Config {
         if (!force && now - lastRead < THROTTLE_MS) return
         lastRead = now
 
-        val values = BooleanArray(5)
+        val values = BooleanArray(BOOL_COUNT)
         val source = when {
             readFromProvider(values) -> "provider"
             readFromPrefs(values) -> "prefs"
@@ -103,25 +160,42 @@ object Config {
         val wk = values[2]
         val wd = values[3]
         val wt = values[4]
+        val ww = values[5]
+        val wn = values[6]
+        val wm = values[7]
+        val wa = values[8]
+        val wsa = values[9]
+        val wl = values[10]
+        val sa = values[11]
         master = m
         altTab = a
         winKey = wk
         winD = wd
         winTab = wt
+        winW = ww
+        winN = wn
+        winM = wm
+        winA = wa
+        winShiftA = wsa
+        winL = wl
+        scopeAll = sa
+        scopePkgs = pendingPkgs
+        pendingPkgs = emptySet()
 
-        if (!logged || valuesChanged(m, a, wk, wd, wt)) {
+        if (!logged || valuesChanged(m, a, wk, wd, wt, ww, wn, wm, wa, wsa, wl)) {
             logged = true
             XposedBridge.log(
-                "$TAG: prefs($source) master=$m alt=$a winkey=$wk wind=$wd wintab=$wt"
+                "$TAG: prefs($source) master=$m alt=$a winkey=$wk wind=$wd wintab=$wt" +
+                    " winw=$ww winn=$wn winm=$wm wina=$wa winshifta=$wsa winl=$wl"
             )
         }
     }
 
     private var lastValues: BooleanArray? = null
 
-    private fun valuesChanged(m: Boolean, a: Boolean, wk: Boolean, wd: Boolean, wt: Boolean): Boolean {
+    private fun valuesChanged(vararg current: Boolean): Boolean {
         val old = lastValues
-        val new = booleanArrayOf(m, a, wk, wd, wt)
+        val new = current.toBooleanArray()
         lastValues = new
         return old == null || !old.contentEquals(new)
     }
@@ -148,6 +222,14 @@ object Config {
             out[2] = bundle.getBoolean(KEY_WIN_KEY, true)
             out[3] = bundle.getBoolean(KEY_WIN_D, true)
             out[4] = bundle.getBoolean(KEY_WIN_TAB, true)
+            out[5] = bundle.getBoolean(KEY_WIN_W, true)
+            out[6] = bundle.getBoolean(KEY_WIN_N, true)
+            out[7] = bundle.getBoolean(KEY_WIN_M, true)
+            out[8] = bundle.getBoolean(KEY_WIN_A, true)
+            out[9] = bundle.getBoolean(KEY_WIN_SHIFT_A, true)
+            out[10] = bundle.getBoolean(KEY_WIN_L, true)
+            out[11] = bundle.getBoolean(KEY_SCOPE_ALL, true)
+            pendingPkgs = bundle.getStringArray(KEY_SCOPE_PKGS)?.toSet() ?: emptySet()
             true
         } catch (t: Throwable) {
             if (!providerErrorLogged) {
@@ -166,6 +248,18 @@ object Config {
         out[2] = p.getBoolean(KEY_WIN_KEY, true)
         out[3] = p.getBoolean(KEY_WIN_D, true)
         out[4] = p.getBoolean(KEY_WIN_TAB, true)
+        out[5] = p.getBoolean(KEY_WIN_W, true)
+        out[6] = p.getBoolean(KEY_WIN_N, true)
+        out[7] = p.getBoolean(KEY_WIN_M, true)
+        out[8] = p.getBoolean(KEY_WIN_A, true)
+        out[9] = p.getBoolean(KEY_WIN_SHIFT_A, true)
+        out[10] = p.getBoolean(KEY_WIN_L, true)
+        out[11] = p.getBoolean(KEY_SCOPE_ALL, true)
+        pendingPkgs = try {
+            p.getStringSet(KEY_SCOPE_PKGS, null)?.toSet() ?: emptySet()
+        } catch (t: Throwable) {
+            emptySet()
+        }
         true
     } catch (t: Throwable) {
         false

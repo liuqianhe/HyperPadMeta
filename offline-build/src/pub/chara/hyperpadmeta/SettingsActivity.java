@@ -29,8 +29,11 @@ import java.util.List;
  * 模块设置页（分组卡片 + 标题/副标题 + 右侧开关）。
  *
  * 设置项：
- *  - 总开关「键盘透传」：关闭后模块完全不干预；开启会一并打开下面 4 条规则。
+ *  - 总开关「键盘透传」：关闭后模块完全不干预；开启会一并打开下面所有规则。
+ *  - 选择应用：全部生效 / 白名单（scope_all + scope_pkgs）。
  *  - 按键：Alt+Tab / Win 键 / Win+D / Win+TAB 可分别开关（总开关关闭时置灰）。
+ *  - 系统快捷键：Win+W / Win+N / Win+M / Win+A / Win+Shift+A / Win+L，
+ *    对应小米 miuishortcuts.xml 里的预制快捷键，关掉即恢复本机行为。
  *  - 界面：显示桌面图标（切换 launcher alias，无需重启）。
  *
  * 所有值写入 prefs(settings)，MainHook 以 XSharedPreferences 实时读取（500ms 节流）。
@@ -44,6 +47,14 @@ public class SettingsActivity extends Activity {
     static final String KEY_WIN_D = "win_d";
     static final String KEY_WIN_TAB = "win_tab";
     static final String KEY_SHOW_ICON = "show_icon";
+    static final String KEY_WIN_W = "win_w";
+    static final String KEY_WIN_N = "win_n";
+    static final String KEY_WIN_M = "win_m";
+    static final String KEY_WIN_A = "win_a";
+    static final String KEY_WIN_SHIFT_A = "win_shift_a";
+    static final String KEY_WIN_L = "win_l";
+    static final String KEY_SCOPE_ALL = "scope_all";
+    static final String KEY_SCOPE_PKGS = "scope_pkgs";
     static final String LAUNCHER_ALIAS = "pub.chara.hyperpadmeta.LauncherAlias";
     private static final String TAG = "HyperPadMeta";
 
@@ -52,6 +63,9 @@ public class SettingsActivity extends Activity {
 
     private SharedPreferences mPrefs;
     private final List<Switch> mSubSwitches = new ArrayList<>();
+    private Switch mScopeAll;
+    private View mScopeAppsRow;
+    private TextView mScopeAppsSummary;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -155,6 +169,31 @@ public class SettingsActivity extends Activity {
                     }
                 }, false);
 
+        // ---- 选择应用：全部生效 / 指定应用 ----
+        LinearLayout appsCard = addGroup(root, R.string.group_apps);
+        mScopeAll = addSwitchItem(appsCard, R.string.item_scope_all, R.string.item_scope_all_summary,
+                mPrefs.getBoolean(KEY_SCOPE_ALL, true),
+                new CompoundButton.OnCheckedChangeListener() {
+                    @Override
+                    public void onCheckedChanged(CompoundButton buttonView, boolean isChecked) {
+                        persist(KEY_SCOPE_ALL, isChecked);
+                        updateScopeRowState();
+                    }
+                }, false);
+        mScopeAppsRow = addClickItem(appsCard, R.string.item_scope_apps, true,
+                new View.OnClickListener() {
+                    @Override
+                    public void onClick(View v) {
+                        if (mScopeAll != null && mScopeAll.isChecked()) {
+                            Toast.makeText(SettingsActivity.this,
+                                    R.string.toast_scope_all_on, Toast.LENGTH_SHORT).show();
+                            return;
+                        }
+                        startActivity(new Intent(SettingsActivity.this, AppPickerActivity.class));
+                    }
+                });
+        updateScopeRowState();
+
         // ---- 按键：四条独立规则 ----
         LinearLayout keyCard = addGroup(root, R.string.group_keys);
         mSubSwitches.add(addSwitchItem(keyCard, R.string.item_alt_tab, R.string.item_alt_tab_summary,
@@ -165,6 +204,21 @@ public class SettingsActivity extends Activity {
                 mPrefs.getBoolean(KEY_WIN_D, true), prefListener(KEY_WIN_D), true));
         mSubSwitches.add(addSwitchItem(keyCard, R.string.item_win_tab, R.string.item_win_tab_summary,
                 mPrefs.getBoolean(KEY_WIN_TAB, true), prefListener(KEY_WIN_TAB), true));
+
+        // ---- 系统快捷键：小米预制的那几条（miuishortcuts.xml） ----
+        LinearLayout sysCard = addGroup(root, R.string.group_shortcuts);
+        mSubSwitches.add(addSwitchItem(sysCard, R.string.item_win_w, R.string.item_win_w_summary,
+                mPrefs.getBoolean(KEY_WIN_W, true), prefListener(KEY_WIN_W), false));
+        mSubSwitches.add(addSwitchItem(sysCard, R.string.item_win_n, R.string.item_win_n_summary,
+                mPrefs.getBoolean(KEY_WIN_N, true), prefListener(KEY_WIN_N), true));
+        mSubSwitches.add(addSwitchItem(sysCard, R.string.item_win_m, R.string.item_win_m_summary,
+                mPrefs.getBoolean(KEY_WIN_M, true), prefListener(KEY_WIN_M), true));
+        mSubSwitches.add(addSwitchItem(sysCard, R.string.item_win_a, R.string.item_win_a_summary,
+                mPrefs.getBoolean(KEY_WIN_A, true), prefListener(KEY_WIN_A), true));
+        mSubSwitches.add(addSwitchItem(sysCard, R.string.item_win_shift_a, R.string.item_win_shift_a_summary,
+                mPrefs.getBoolean(KEY_WIN_SHIFT_A, true), prefListener(KEY_WIN_SHIFT_A), true));
+        mSubSwitches.add(addSwitchItem(sysCard, R.string.item_win_l, R.string.item_win_l_summary,
+                mPrefs.getBoolean(KEY_WIN_L, true), prefListener(KEY_WIN_L), true));
 
         // 总开关关闭时子项置灰
         boolean masterOn = master.isChecked();
@@ -192,6 +246,31 @@ public class SettingsActivity extends Activity {
         // 页脚说明（「模块只作用于系统按键分发层…」）已移到「关于」页
 
         return scroll;
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        if (mScopeAppsSummary != null) {
+            int n = mPrefs.getStringSet(KEY_SCOPE_PKGS, java.util.Collections.<String>emptySet()).size();
+            mScopeAppsSummary.setText(n == 0
+                    ? getString(R.string.item_scope_apps_summary_none)
+                    : getString(R.string.item_scope_apps_summary, n));
+        }
+    }
+
+    /** 「全部生效」开着时，下面的「选择应用」置灰不可点。 */
+    private void updateScopeRowState() {
+        if (mScopeAll == null || mScopeAppsRow == null) return;
+        boolean enabled = !mScopeAll.isChecked();
+        mScopeAppsRow.setAlpha(enabled ? 1f : 0.45f);
+        if (mScopeAppsSummary != null) {
+            int n = mPrefs.getStringSet(KEY_SCOPE_PKGS, java.util.Collections.<String>emptySet()).size();
+            mScopeAppsSummary.setText(enabled
+                    ? (n == 0 ? getString(R.string.item_scope_apps_summary_none)
+                              : getString(R.string.item_scope_apps_summary, n))
+                    : getString(R.string.item_scope_apps_summary_all));
+        }
     }
 
     private CompoundButton.OnCheckedChangeListener prefListener(final String key) {
@@ -318,6 +397,48 @@ public class SettingsActivity extends Activity {
         swLp.leftMargin = dp(12);
         row.addView(sw, swLp);
         return sw;
+    }
+
+    /** 可点行（标题 + 副标题 + 右侧箭头），返回行容器。 */
+    private View addClickItem(LinearLayout card, int titleRes, boolean withDivider,
+                              View.OnClickListener listener) {
+        if (withDivider) addDivider(card);
+
+        LinearLayout row = new LinearLayout(this);
+        row.setOrientation(LinearLayout.HORIZONTAL);
+        row.setGravity(Gravity.CENTER_VERTICAL);
+        row.setPadding(dp(20), dp(16), dp(16), dp(16));
+        row.setClickable(true);
+        row.setOnClickListener(listener);
+        card.addView(row, wrapLp());
+
+        LinearLayout texts = new LinearLayout(this);
+        texts.setOrientation(LinearLayout.VERTICAL);
+        row.addView(texts, new LinearLayout.LayoutParams(0, WRAP, 1f));
+
+        TextView t = new TextView(this);
+        t.setText(titleRes);
+        t.setTextSize(TypedValue.COMPLEX_UNIT_SP, 16);
+        t.setTextColor(getColor(R.color.text_primary));
+        texts.addView(t, wrapLp());
+
+        TextView s = new TextView(this);
+        s.setTextSize(TypedValue.COMPLEX_UNIT_SP, 13);
+        s.setTextColor(getColor(R.color.text_secondary));
+        s.setLineSpacing(dp(2), 1f);
+        LinearLayout.LayoutParams sLp = wrapLp();
+        sLp.topMargin = dp(4);
+        texts.addView(s, sLp);
+        mScopeAppsSummary = s;
+
+        TextView arrow = new TextView(this);
+        arrow.setText("›");
+        arrow.setTextSize(TypedValue.COMPLEX_UNIT_SP, 20);
+        arrow.setTextColor(getColor(R.color.text_secondary));
+        arrow.setPadding(dp(12), 0, dp(4), 0);
+        row.addView(arrow, new LinearLayout.LayoutParams(WRAP, WRAP));
+
+        return row;
     }
 
     private boolean isLauncherVisible() {

@@ -5,6 +5,7 @@ import com.github.kyuubiran.ezxhelper.utils.findMethod
 import com.github.kyuubiran.ezxhelper.utils.hookBefore
 import de.robv.android.xposed.XposedBridge
 import pub.chara.hyperpadmeta.Config
+import pub.chara.hyperpadmeta.Foreground
 import pub.chara.hyperpadmeta.KeyRules
 
 /**
@@ -44,6 +45,7 @@ object HyperOSAltTabHooks : BaseHook() {
         // 1) 小米子类分发：Alt+Tab 或任何 Meta/Win 事件一律放行（返回 0L）
         try {
             findMethod(MIUI_PWM) { name == "interceptKeyBeforeDispatching" }.hookBefore { param ->
+                Foreground.remember(param.thisObject)
                 val event = param.args.getOrNull(1) as? KeyEvent ?: return@hookBefore
                 if (KeyRules.shouldPassthrough(event)) {
                     // 0L = 不拦截，事件原样派发给前台应用
@@ -70,15 +72,22 @@ object HyperOSAltTabHooks : BaseHook() {
             XposedBridge.log(e)
         }
 
-        // 3) Win 组合键核心：shouldInterceptKeys 对带 Win 修饰的事件返回 false（不拦截）
+        // 3) Win 组合键核心：shouldInterceptKeys 对命中项返回 false（不拦截）
+        //    关掉的那一项要返回 true 交回系统，否则小米快捷键永远不触发。
         try {
             findMethod(KEY_COMBO_RULE) { name == "shouldInterceptKeys" }.hookBefore { param ->
                 val keyCode = param.args.getOrNull(0) as? Int ?: return@hookBefore
                 val metaState = param.args.getOrNull(1) as? Int ?: return@hookBefore
                 if (metaState and KeyEvent.META_META_ON == 0) return@hookBefore
+                val shift = metaState and KeyEvent.META_SHIFT_ON != 0
                 val enabled = when (keyCode) {
                     KeyEvent.KEYCODE_D -> Config.winDEnabled
                     KeyEvent.KEYCODE_TAB -> Config.winTabEnabled
+                    KeyEvent.KEYCODE_W -> Config.winWEnabled
+                    KeyEvent.KEYCODE_N -> Config.winNEnabled
+                    KeyEvent.KEYCODE_M -> Config.winMEnabled
+                    KeyEvent.KEYCODE_L -> Config.winLEnabled
+                    KeyEvent.KEYCODE_A -> if (shift) Config.winShiftAEnabled else Config.winAEnabled
                     else -> Config.masterEnabled
                 }
                 if (enabled) param.result = false

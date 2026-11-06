@@ -24,6 +24,22 @@ import de.robv.android.xposed.callbacks.XC_LoadPackage;
  *   win_key      单按 Win / Meta 键
  *   win_d        Win+D
  *   win_tab      Win+TAB
+ *   win_w        Win+W      关闭当前窗口（miuishortcuts type 8）
+ *   win_n        Win+N      通知中心（type 2）
+ *   win_m        Win+M      控制中心（type 1）
+ *   win_a        Win+A      截全屏（type 6，系统默认关闭）
+ *   win_shift_a  Win+Shift+A 区域截屏（type 7）
+ *   win_l        Win+L      锁屏（type 5，系统默认关闭）
+ *   scope_all    应用白名单总开关：true = 所有应用生效；false = 只在 scope_pkgs 里的应用生效
+ *   scope_pkgs   白名单包名集合（只在 scope_all=false 时有意义，其余应用保持小米默认行为）
+ *
+ * 小米预制的键盘快捷键来自 /data/system/miuishortcuts.xml（由 MiuiKeyShortcutRuleManager
+ * 解析成 KeyboardCombinationRule），一共 13 条：除上述 9 条外还有 Win+↑/↓/←/→ 的窗口贴靠
+ * （type 9~12），那四条跟随总开关，不单独设开关。
+ *
+ * 白名单只做「按键级」判定：每次按键现查前台包名，命中才接管。
+ * 绝不改系统级开关（is_custom_shortcut_effective / getKeyboardShortcutEnable 的入参），
+ * 否则白名单外的应用会跟着一起被关掉小米快捷键。
  *
  * 配置读取：应用导出 ConfigProvider，system_server 通过 ContentResolver.call() 走 Binder 取值
  * （SELinux MLS 限制下 XSharedPreferences 读不到应用私有目录），500ms 节流，改开关无需重启。
@@ -74,6 +90,18 @@ public class MainHook implements IXposedHookLoadPackage {
     static final String KEY_WIN_KEY = "win_key";
     static final String KEY_WIN_D = "win_d";
     static final String KEY_WIN_TAB = "win_tab";
+    /** 小米预制快捷键（/data/system/miuishortcuts.xml 里那几条），逐项可关。 */
+    static final String KEY_WIN_W = "win_w";
+    static final String KEY_WIN_N = "win_n";
+    static final String KEY_WIN_M = "win_m";
+    static final String KEY_WIN_A = "win_a";
+    static final String KEY_WIN_SHIFT_A = "win_shift_a";
+    static final String KEY_WIN_L = "win_l";
+    static final String KEY_SCOPE_ALL = "scope_all";
+    static final String KEY_SCOPE_PKGS = "scope_pkgs";
+
+    /** 从 Provider 读的布尔项个数（顺序与 refresh 里的取值一致）。 */
+    private static final int BOOL_COUNT = 12;
 
     private static final String MIUI_PWM = "com.android.server.policy.BaseMiuiPhoneWindowManager";
     private static final String AOSP_PWM = "com.android.server.policy.PhoneWindowManager";
@@ -104,11 +132,51 @@ public class MainHook implements IXposedHookLoadPackage {
     private static volatile boolean sWinKey = true;
     private static volatile boolean sWinD = true;
     private static volatile boolean sWinTab = true;
+    private static volatile boolean sWinW = true;
+    private static volatile boolean sWinN = true;
+    private static volatile boolean sWinM = true;
+    private static volatile boolean sWinA = true;
+    private static volatile boolean sWinShiftA = true;
+    private static volatile boolean sWinL = true;
     private static volatile long sLastRead = 0L;
     private static volatile boolean sLogged = false;
     private static volatile android.content.Context sSystemCtx = null;
     private static volatile boolean sCtxTried = false;
     private static volatile boolean sProvErrLogged = false;
+
+    // ---------------- 应用白名单 ----------------
+    /** 全部应用生效；为 false 时只有 sScopePkgs 里的应用才替换小米快捷键。 */
+    private static volatile boolean sScopeAll = true;
+    /** 白名单包名集合（scope_all=false 时生效）。 */
+    private static volatile Set<String> sScopePkgs = newPkgSet();
+    /** 最近一次从 Provider 读到的包名数组（refresh 里转成 sScopePkgs）。 */
+    private static volatile String[] sProvPkgs = null;
+    /** 上一次记录过「不在白名单」的包名，避免刷屏。 */
+    private static volatile String sLastMissPkg = null;
+
+    /** 前台窗口的包名缓存（反射 BaseMiuiPhoneWindowManager.mFocusedWindow）。 */
+    private static volatile Object sPwm = null;
+    private static volatile java.lang.reflect.Field sFocusedField = null;
+    private static volatile String sFgPkg = null;
+    private static volatile long sFgAt = 0L;
+    /** 最后一次成功取到前台包名的时间（用于在窗口切换的空档期沿用旧值）。 */
+    private static volatile long sFgGoodAt = 0L;
+    private static volatile boolean sFgErrLogged = false;
+
+    private static Set<String> newPkgSet() {
+        return Collections.newSetFromMap(
+                new java.util.concurrent.ConcurrentHashMap<String, Boolean>());
+    }
+
+    private static Set<String> toPkgSet(String[] arr) {
+        Set<String> out = newPkgSet();
+        if (arr != null) {
+            for (String a : arr) {
+                if (a != null && a.length() > 0) out.add(a.trim());
+            }
+        }
+        return out;
+    }
 
     /** DOWN 已被放行的 keyCode；UP 时据此配对放行，不再依赖可能已清空的 metaState。 */
     private static final Set<Integer> sPassedKeys =
@@ -158,6 +226,14 @@ public class MainHook implements IXposedHookLoadPackage {
             out[2] = b.getBoolean(KEY_WIN_KEY, true);
             out[3] = b.getBoolean(KEY_WIN_D, true);
             out[4] = b.getBoolean(KEY_WIN_TAB, true);
+            out[5] = b.getBoolean(KEY_WIN_W, true);
+            out[6] = b.getBoolean(KEY_WIN_N, true);
+            out[7] = b.getBoolean(KEY_WIN_M, true);
+            out[8] = b.getBoolean(KEY_WIN_A, true);
+            out[9] = b.getBoolean(KEY_WIN_SHIFT_A, true);
+            out[10] = b.getBoolean(KEY_WIN_L, true);
+            out[11] = b.getBoolean(KEY_SCOPE_ALL, true);
+            sProvPkgs = b.getStringArray(KEY_SCOPE_PKGS);
             return true;
         } catch (Throwable t) {
             if (!sProvErrLogged) {
@@ -174,11 +250,13 @@ public class MainHook implements IXposedHookLoadPackage {
         if (now - sLastRead < 500L) return;
         sLastRead = now;
 
-        boolean m, a, wk, wd, wt;
+        boolean m, a, wk, wd, wt, ww, wn, wm, wa, wsa, wl, sa;
         String src = "provider";
-        boolean[] v = new boolean[5];
+        boolean[] v = new boolean[BOOL_COUNT];
         if (readFromProvider(v)) {
             m = v[0]; a = v[1]; wk = v[2]; wd = v[3]; wt = v[4];
+            ww = v[5]; wn = v[6]; wm = v[7]; wa = v[8]; wsa = v[9]; wl = v[10];
+            sa = v[11];
         } else {
             src = "prefs";
             try {
@@ -191,29 +269,185 @@ public class MainHook implements IXposedHookLoadPackage {
                 wk = sPrefs.getBoolean(KEY_WIN_KEY, true);
                 wd = sPrefs.getBoolean(KEY_WIN_D, true);
                 wt = sPrefs.getBoolean(KEY_WIN_TAB, true);
+                ww = sPrefs.getBoolean(KEY_WIN_W, true);
+                wn = sPrefs.getBoolean(KEY_WIN_N, true);
+                wm = sPrefs.getBoolean(KEY_WIN_M, true);
+                wa = sPrefs.getBoolean(KEY_WIN_A, true);
+                wsa = sPrefs.getBoolean(KEY_WIN_SHIFT_A, true);
+                wl = sPrefs.getBoolean(KEY_WIN_L, true);
+                sa = sPrefs.getBoolean(KEY_SCOPE_ALL, true);
+                try {
+                    Set<String> set = sPrefs.getStringSet(KEY_SCOPE_PKGS, null);
+                    sProvPkgs = set == null ? null : set.toArray(new String[0]);
+                } catch (Throwable ignored) {
+                    sProvPkgs = null;
+                }
             } catch (Throwable t) {
-                m = a = wk = wd = wt = true;
+                m = a = wk = wd = wt = ww = wn = wm = wa = wsa = wl = sa = true;
                 src = "default";
             }
         }
 
-        if (!sLogged || m != sMaster || a != sAltTab || wk != sWinKey || wd != sWinD || wt != sWinTab) {
+        Set<String> pkgs = toPkgSet(sProvPkgs);
+        boolean scopeChanged = sa != sScopeAll || !pkgs.equals(sScopePkgs);
+
+        if (!sLogged || m != sMaster || a != sAltTab || wk != sWinKey || wd != sWinD
+                || wt != sWinTab || ww != sWinW || wn != sWinN || wm != sWinM
+                || wa != sWinA || wsa != sWinShiftA || wl != sWinL || scopeChanged) {
             sMaster = m;
             sAltTab = a;
             sWinKey = wk;
             sWinD = wd;
             sWinTab = wt;
+            sWinW = ww;
+            sWinN = wn;
+            sWinM = wm;
+            sWinA = wa;
+            sWinShiftA = wsa;
+            sWinL = wl;
+            sScopeAll = sa;
+            sScopePkgs = pkgs;
             sLogged = true;
             XposedBridge.log(TAG + ": prefs(" + src + ") master=" + m + " alt=" + a
-                    + " winkey=" + wk + " wind=" + wd + " wintab=" + wt);
+                    + " winkey=" + wk + " wind=" + wd + " wintab=" + wt
+                    + " winw=" + ww + " winn=" + wn + " winm=" + wm
+                    + " wina=" + wa + " winshifta=" + wsa + " winl=" + wl
+                    + " scopeAll=" + sa + " scope=" + pkgs);
         }
     }
 
-    private static boolean allowMaster() { refresh(); return sMaster; }
-    private static boolean allowAltTab() { refresh(); return sMaster && sAltTab; }
-    private static boolean allowWinKey() { refresh(); return sMaster && sWinKey; }
-    private static boolean allowWinD() { refresh(); return sMaster && sWinD; }
-    private static boolean allowWinTab() { refresh(); return sMaster && sWinTab; }
+    /**
+     * 记录 Policy 实例（BaseMiuiPhoneWindowManager），用来反射它身上的 mFocusedWindow。
+     * system_server 里只有一个实例，强引用没有额外生命周期负担。
+     */
+    private static void rememberPwm(Object pwm) {
+        if (pwm == null || sPwm != null) return;
+        // 只有 Policy 实例身上才有 mFocusedWindow；别的类（MiuiKeyInterceptExtend 等）直接忽略
+        if (!pwm.getClass().getName().endsWith("PhoneWindowManager")) return;
+        java.lang.reflect.Field f = null;
+        for (Class<?> c = pwm.getClass(); c != null && f == null; c = c.getSuperclass()) {
+            try {
+                f = c.getDeclaredField("mFocusedWindow");
+            } catch (NoSuchFieldException ignored) {
+                // 继续往父类找（实现在 BaseMiuiPhoneWindowManager / PhoneWindowManager）
+            }
+        }
+        if (f == null) {
+            if (!sFgErrLogged) {
+                sFgErrLogged = true;
+                XposedBridge.log(TAG + ": mFocusedWindow not found on " + pwm.getClass().getName());
+            }
+            return;
+        }
+        try {
+            f.setAccessible(true);
+        } catch (Throwable ignored) {
+        }
+        sFocusedField = f;
+        sPwm = pwm;
+        XposedBridge.log(TAG + ": focus source = " + pwm.getClass().getName() + ".mFocusedWindow");
+    }
+
+    /** 从 WindowState 取包名：getOwningPackage() → getAttrs().packageName → 反射 mAttrs。 */
+    private static String pkgOfWindow(Object ws) {
+        try {
+            Object p = XposedHelpers.callMethod(ws, "getOwningPackage");
+            if (p instanceof String && ((String) p).length() > 0) return (String) p;
+        } catch (Throwable ignored) {
+        }
+        try {
+            Object attrs = XposedHelpers.callMethod(ws, "getAttrs");
+            if (attrs instanceof android.view.WindowManager.LayoutParams) {
+                String pkg = ((android.view.WindowManager.LayoutParams) attrs).packageName;
+                if (pkg != null && pkg.length() > 0) return pkg;
+            }
+        } catch (Throwable ignored) {
+        }
+        for (Class<?> c = ws.getClass(); c != null; c = c.getSuperclass()) {
+            try {
+                java.lang.reflect.Field f = c.getDeclaredField("mAttrs");
+                f.setAccessible(true);
+                Object attrs = f.get(ws);
+                if (attrs instanceof android.view.WindowManager.LayoutParams) {
+                    return ((android.view.WindowManager.LayoutParams) attrs).packageName;
+                }
+            } catch (Throwable ignored) {
+            }
+        }
+        return null;
+    }
+
+    /**
+     * 当前前台窗口的包名（150ms 缓存）。
+     *
+     * 取法的安全性：只读 mFocusedWindow 身上的字段，不做跨进程查询、不拿 AMS/WMS 锁，
+     * 按键路径上开销可忽略。拿不到时返回 null，调用方按「生效」处理。
+     */
+    private static String foregroundPkg() {
+        long now = SystemClock.elapsedRealtime();
+        if (now - sFgAt < 120L) return sFgPkg;
+        sFgAt = now;
+        String pkg = null;
+        try {
+            Object pwm = sPwm;
+            java.lang.reflect.Field f = sFocusedField;
+            if (pwm != null && f != null) {
+                Object ws = f.get(pwm);
+                if (ws != null) pkg = pkgOfWindow(ws);
+            }
+        } catch (Throwable t) {
+            if (!sFgErrLogged) {
+                sFgErrLogged = true;
+                XposedBridge.log(TAG + ": foregroundPkg failed: " + t);
+            }
+        }
+        if (pkg != null) {
+            sFgPkg = pkg;
+            sFgGoodAt = now;
+        } else if (now - sFgGoodAt > 1200L) {
+            // 切窗口的瞬间 mFocusedWindow 会短暂为 null；1.2s 内沿用上一个有效包名，
+            // 超过就认为真的拿不到，交给 inScope 按「不在白名单」处理。
+            sFgPkg = null;
+        }
+        return sFgPkg;
+    }
+
+    /**
+     * 白名单判定：全部生效 → 恒 true；否则只有前台包名在集合里才生效。
+     *
+     * 取不到前台包名时按「不在白名单」处理（fail-closed）：
+     * 之前是 fail-open（当成生效），结果在窗口切换的瞬间 / 焦点窗口为空时，
+     * 白名单外的应用也会被接管，表现就是「小米自带快捷键还是被屏蔽了」。
+     */
+    private static boolean inScope() {
+        if (sScopeAll) return true;
+        String pkg = foregroundPkg();
+        if (pkg == null) {
+            if (!"(null)".equals(sLastMissPkg)) {
+                sLastMissPkg = "(null)";
+                XposedBridge.log(TAG + ": scope: focused window unknown -> native");
+            }
+            return false;
+        }
+        boolean hit = sScopePkgs.contains(pkg);
+        if (!hit && !pkg.equals(sLastMissPkg)) {
+            sLastMissPkg = pkg;
+            XposedBridge.log(TAG + ": scope skip pkg=" + pkg + " list=" + sScopePkgs);
+        }
+        return hit;
+    }
+
+    private static boolean allowMaster() { refresh(); return sMaster && inScope(); }
+    private static boolean allowAltTab() { return allowMaster() && sAltTab; }
+    private static boolean allowWinKey() { return allowMaster() && sWinKey; }
+    private static boolean allowWinD() { return allowMaster() && sWinD; }
+    private static boolean allowWinTab() { return allowMaster() && sWinTab; }
+    private static boolean allowWinW() { return allowMaster() && sWinW; }
+    private static boolean allowWinN() { return allowMaster() && sWinN; }
+    private static boolean allowWinM() { return allowMaster() && sWinM; }
+    private static boolean allowWinA() { return allowMaster() && sWinA; }
+    private static boolean allowWinShiftA() { return allowMaster() && sWinShiftA; }
+    private static boolean allowWinL() { return allowMaster() && sWinL; }
 
     private static boolean isMetaKey(int keyCode) {
         return keyCode == KeyEvent.KEYCODE_META_LEFT || keyCode == KeyEvent.KEYCODE_META_RIGHT;
@@ -247,6 +481,14 @@ public class MainHook implements IXposedHookLoadPackage {
         if ((ev.getMetaState() & KeyEvent.META_META_ON) != 0 || ev.isMetaPressed()) {
             if (kc == KeyEvent.KEYCODE_D) return allowWinD();
             if (kc == KeyEvent.KEYCODE_TAB) return allowWinTab();
+            if (kc == KeyEvent.KEYCODE_W) return allowWinW();
+            if (kc == KeyEvent.KEYCODE_N) return allowWinN();
+            if (kc == KeyEvent.KEYCODE_M) return allowWinM();
+            if (kc == KeyEvent.KEYCODE_L) return allowWinL();
+            if (kc == KeyEvent.KEYCODE_A) {
+                // Win+Shift+A 区域截屏 / Win+A 截全屏 是两条独立规则，先判 Shift
+                return ev.isShiftPressed() ? allowWinShiftA() : allowWinA();
+            }
             return allowMaster();
         }
         return false;
@@ -270,9 +512,72 @@ public class MainHook implements IXposedHookLoadPackage {
     }
 
     /**
+     * 该事件对应的开关是否被用户关掉 —— 关掉就意味着「这一项交回小米/系统处理」。
+     *
+     * 用在两个地方：
+     *  1. shouldBypassComboState：不再绕过 KeyCombinationManager，规则才能照常触发；
+     *  2. PASS_META_COMBO：shouldInterceptKeys 不返回 false，规则才消费这个键。
+     * 两处缺一不可：只改后者的话键照样被状态机跳过，系统快捷键根本不触发。
+     */
+    private static boolean shortcutTurnedOff(KeyEvent ev) {
+        if (ev == null) return false;
+        int kc = ev.getKeyCode();
+        boolean meta = (ev.getMetaState() & KeyEvent.META_META_ON) != 0 || ev.isMetaPressed();
+        if (!meta) {
+            return kc == KeyEvent.KEYCODE_TAB && ev.isAltPressed() && !allowAltTab();
+        }
+        switch (kc) {
+            case KeyEvent.KEYCODE_D:
+                return !allowWinD();
+            case KeyEvent.KEYCODE_TAB:
+                return !allowWinTab();
+            case KeyEvent.KEYCODE_W:
+                return !allowWinW();
+            case KeyEvent.KEYCODE_N:
+                return !allowWinN();
+            case KeyEvent.KEYCODE_M:
+                return !allowWinM();
+            case KeyEvent.KEYCODE_L:
+                return !allowWinL();
+            case KeyEvent.KEYCODE_A:
+                return ev.isShiftPressed() ? !allowWinShiftA() : !allowWinA();
+            default:
+                return false;
+        }
+    }
+
+    /**
+     * 只看 keyCode 的版本（getKeyInterceptTimeout 拿不到 metaState）。
+     * A 键同时对应 Win+A / Win+Shift+A 两条规则，两个开关都关才算「交回系统」。
+     */
+    private static boolean shortcutKeyTurnedOff(int kc) {
+        switch (kc) {
+            case KeyEvent.KEYCODE_D:
+                return !allowWinD();
+            case KeyEvent.KEYCODE_TAB:
+                return !allowWinTab() && !allowAltTab();
+            case KeyEvent.KEYCODE_W:
+                return !allowWinW();
+            case KeyEvent.KEYCODE_N:
+                return !allowWinN();
+            case KeyEvent.KEYCODE_M:
+                return !allowWinM();
+            case KeyEvent.KEYCODE_L:
+                return !allowWinL();
+            case KeyEvent.KEYCODE_A:
+                return !allowWinA() && !allowWinShiftA();
+            default:
+                return false;
+        }
+    }
+
+    /**
      * 是否绕过 KeyCombinationManager 的状态机。
      * 总开关开启时**所有键盘按键**都绕过（小米注册的 13 条规则覆盖方向键 / A / D / TAB /
      * Alt / Ctrl / Win 各种组合，只放行 Win 组合会漏掉大半），仅保留电源 / 音量组合键。
+     *
+     * 例外：某一项开关被关掉时，该组合必须正常进状态机，否则规则永远不触发 ——
+     * 表现就是「开关关了，小米快捷键还是没反应」。
      */
     private static boolean shouldBypassComboState(KeyEvent ev) {
         if (ev == null || !allowMaster()) return false;
@@ -280,6 +585,7 @@ public class MainHook implements IXposedHookLoadPackage {
         if (kc == KeyEvent.KEYCODE_POWER
                 || kc == KeyEvent.KEYCODE_VOLUME_UP
                 || kc == KeyEvent.KEYCODE_VOLUME_DOWN) return false;
+        if (shortcutTurnedOff(ev)) return false;
         if (ev.getAction() == KeyEvent.ACTION_DOWN) sPassedKeys.add(kc);
         return true;
     }
@@ -303,6 +609,7 @@ public class MainHook implements IXposedHookLoadPackage {
             Object arg = param.args != null && param.args.length > 1 ? param.args[1] : null;
             if (!(arg instanceof KeyEvent)) return;
             KeyEvent ev = (KeyEvent) arg;
+            rememberPwm(param.thisObject);
             if (isTargetEvent(ev)) {
                 param.setResult(0L);
                 diag("dispatch", ev);
@@ -321,6 +628,7 @@ public class MainHook implements IXposedHookLoadPackage {
     private static final XC_MethodHook NO_ALT_TAB_NOTIFY = new XC_MethodHook() {
         @Override
         protected void beforeHookedMethod(MethodHookParam param) {
+            rememberPwm(param.thisObject);
             if (isPassthroughTarget(firstKeyEvent(param.args))) param.setResult(null);
         }
     };
@@ -329,6 +637,7 @@ public class MainHook implements IXposedHookLoadPackage {
     private static final XC_MethodHook PASS_META_KEY = new XC_MethodHook() {
         @Override
         protected void beforeHookedMethod(MethodHookParam param) {
+            rememberPwm(param.thisObject);
             if (allowWinKey()) param.setResult(null);
         }
     };
@@ -353,12 +662,25 @@ public class MainHook implements IXposedHookLoadPackage {
             int metaState = (Integer) m;
 
             boolean allow;
-            if (keyCode == KeyEvent.KEYCODE_D && (metaState & KeyEvent.META_META_ON) != 0) {
+            boolean meta = (metaState & KeyEvent.META_META_ON) != 0;
+            boolean shift = (metaState & KeyEvent.META_SHIFT_ON) != 0;
+            if (keyCode == KeyEvent.KEYCODE_D && meta) {
                 allow = allowWinD();
-            } else if (keyCode == KeyEvent.KEYCODE_TAB && (metaState & KeyEvent.META_META_ON) != 0) {
+            } else if (keyCode == KeyEvent.KEYCODE_TAB && meta) {
                 allow = allowWinTab();
             } else if (keyCode == KeyEvent.KEYCODE_TAB && (metaState & KeyEvent.META_ALT_ON) != 0) {
                 allow = allowAltTab();
+            } else if (keyCode == KeyEvent.KEYCODE_W && meta) {
+                allow = allowWinW();
+            } else if (keyCode == KeyEvent.KEYCODE_N && meta) {
+                allow = allowWinN();
+            } else if (keyCode == KeyEvent.KEYCODE_M && meta) {
+                allow = allowWinM();
+            } else if (keyCode == KeyEvent.KEYCODE_L && meta) {
+                allow = allowWinL();
+            } else if (keyCode == KeyEvent.KEYCODE_A && meta) {
+                // Win+Shift+A 区域截屏 / Win+A 截全屏，两条规则分别对应开关
+                allow = shift ? allowWinShiftA() : allowWinA();
             } else {
                 // 其余组合（Ctrl / Shift / 无修饰等）跟随总开关
                 allow = allowMaster();
@@ -390,16 +712,14 @@ public class MainHook implements IXposedHookLoadPackage {
         }
     };
 
-    /** 双保险：总开关开启时所有键盘按键都不产生 InputDispatcher 拦截延迟。 */
+    /** 双保险：总开关开启时所有键盘按键都不产生 InputDispatcher 拦截延迟（关掉的项除外）。 */
     private static final XC_MethodHook NO_INTERCEPT_TIMEOUT = new XC_MethodHook() {
         @Override
         protected void beforeHookedMethod(MethodHookParam param) {
             Object arg = param.args != null && param.args.length > 0 ? param.args[0] : null;
             if (!(arg instanceof Integer)) return;
             int kc = (Integer) arg;
-            if (allowMaster() && kc != KeyEvent.KEYCODE_POWER
-                    && kc != KeyEvent.KEYCODE_VOLUME_UP
-                    && kc != KeyEvent.KEYCODE_VOLUME_DOWN) {
+            if (allowMaster() && !isSystemComboKey(kc) && !shortcutKeyTurnedOff(kc)) {
                 param.setResult(0L);
             }
         }
@@ -418,6 +738,7 @@ public class MainHook implements IXposedHookLoadPackage {
             Object arg = param.args != null && param.args.length > 0 ? param.args[0] : null;
             if (!(arg instanceof KeyEvent)) return;
             KeyEvent ev = (KeyEvent) arg;
+            rememberPwm(param.thisObject);
             if (!allowMaster() || isSystemComboKey(ev.getKeyCode())) return;
             Object r = param.getResult();
             int flags = r instanceof Integer ? (Integer) r : 0;
@@ -434,6 +755,7 @@ public class MainHook implements IXposedHookLoadPackage {
             Object arg = param.args != null && param.args.length > 0 ? param.args[0] : null;
             if (!(arg instanceof KeyEvent)) return;
             KeyEvent ev = (KeyEvent) arg;
+            rememberPwm(param.thisObject);
             if (allowMaster() && !isSystemComboKey(ev.getKeyCode())) param.setResult(false);
         }
     };
@@ -477,23 +799,13 @@ public class MainHook implements IXposedHookLoadPackage {
         return null;
     }
 
-    /** 策略开关 setter 强制写 false，防止亮屏 300ms 后系统把快捷键重新打开。 */
-    private static final XC_MethodHook FORCE_DISABLE = new XC_MethodHook() {
-        @Override
-        protected void beforeHookedMethod(MethodHookParam param) {
-            if (allowMaster() && param.args != null && param.args.length > 0) {
-                param.args[0] = false;
-            }
-        }
-    };
-
-    /** 策略开关 getter 一律返回 false（双保险）。 */
-    private static final XC_MethodHook REPORT_DISABLED = new XC_MethodHook() {
-        @Override
-        protected void beforeHookedMethod(MethodHookParam param) {
-            if (allowMaster()) param.setResult(false);
-        }
-    };
+    // 两条红线，都踩过：
+    //  1. 不改 setKeyboardShortcutEnable 的入参 —— 那是系统级开关（is_custom_shortcut_effective），
+    //     改了会在整个系统里留痕，白名单外的应用也会跟着失去小米快捷键；
+    //  2. 也不 hook getKeyboardShortcutEnable / getAospKeyboardShortcutEnable 让它返回 false ——
+    //     那等于告诉 MiuiKeyInterceptExtend「键盘快捷键功能没启用」，整条链直接跳过快捷键，
+    //     于是用户把某一项开关关掉时，小米原生的快捷键也永远不会响应。
+    // 屏蔽单个组合只靠 getKeyInterceptType 返回 TYPE_PASS_TO_APP，足够了。
 
     @Override
     public void handleLoadPackage(XC_LoadPackage.LoadPackageParam lpparam) {
@@ -529,15 +841,12 @@ public class MainHook implements IXposedHookLoadPackage {
         hook(lpparam.classLoader, SHORTCUT_HELPER, "interceptKeyByLongPress",
                 new Class<?>[]{KeyEvent.class}, NO_PRIVATE_INTERCEPT, "shortcut interceptKeyByLongPress");
 
-        // 物理键盘专属策略层：拦截类型归零 + 快捷键策略强制关闭
-        hook(lpparam.classLoader, KEY_INTERCEPT_EXTEND, "setKeyboardShortcutEnable",
-                new Class<?>[]{boolean.class}, FORCE_DISABLE, "KeyInterceptExtend.setKeyboardShortcutEnable");
-        hook(lpparam.classLoader, KEY_INTERCEPT_EXTEND, "setAospKeyboardShortcutEnable",
-                new Class<?>[]{boolean.class}, FORCE_DISABLE, "KeyInterceptExtend.setAospKeyboardShortcutEnable");
-        hook(lpparam.classLoader, KEY_INTERCEPT_EXTEND, "getKeyboardShortcutEnable",
-                new Class<?>[]{}, REPORT_DISABLED, "KeyInterceptExtend.getKeyboardShortcutEnable");
-        hook(lpparam.classLoader, KEY_INTERCEPT_EXTEND, "getAospKeyboardShortcutEnable",
-                new Class<?>[]{}, REPORT_DISABLED, "KeyInterceptExtend.getAospKeyboardShortcutEnable");
+        // 物理键盘专属策略层：拦截类型归零
+        // 注意：**不要**把 getKeyboardShortcutEnable / getAospKeyboardShortcutEnable 改判为 false。
+        // 那两个 getter 是「这套键盘快捷键功能有没有启用」的总问询，返回 false 会让
+        // MiuiKeyInterceptExtend 整条链直接跳过快捷键 —— 于是用户把某一项开关关掉时，
+        // 小米原本的快捷键也永远不会响应（实测 Win+N 关掉后依旧不弹通知中心）。
+        // 屏蔽单个组合靠 getKeyInterceptType 返回 TYPE_PASS_TO_APP 就够了。
         hook(lpparam.classLoader, KEY_INTERCEPT_EXTEND, "interceptMiuiKeyboard",
                 new Class<?>[]{KeyEvent.class, boolean.class}, NO_PRIVATE_INTERCEPT,
                 "KeyInterceptExtend.interceptMiuiKeyboard");

@@ -5,6 +5,7 @@ import com.github.kyuubiran.ezxhelper.utils.*
 import pub.chara.hyperpadmeta.MyFakeList
 import de.robv.android.xposed.XposedBridge
 import pub.chara.hyperpadmeta.Config
+import pub.chara.hyperpadmeta.Foreground
 import pub.chara.hyperpadmeta.KeyRules
 
 object MIUIHotkeyHooksAndroid12 : BaseHook() {
@@ -25,6 +26,7 @@ object MIUIHotkeyHooksAndroid12 : BaseHook() {
                 name == "interceptKeyBeforeDispatching"
             }.hookBefore { param ->
                 run {
+                    Foreground.remember(param.thisObject)
                     val arg1: KeyEvent = param.args[1] as KeyEvent;
                     // 命中设置页开关的事件才放行（总开关关闭时完全不干预）
                     if (KeyRules.shouldPassthrough(arg1)) {

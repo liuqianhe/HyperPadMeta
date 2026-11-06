@@ -10,8 +10,8 @@ android {
         applicationId = "pub.chara.hyperpadmeta"
         minSdk = 30
         targetSdk = 32
-        versionCode = 12
-        versionName = "3.2-hyperos3"
+        versionCode = 13
+        versionName = "3.3-hyperos3"
     }
 
     // 正式发布密钥：keystore/hyperpadmeta-release.jks（jks 入库，密码不入库）

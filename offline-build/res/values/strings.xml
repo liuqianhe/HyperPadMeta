@@ -8,20 +8,75 @@
     <string name="item_master">键盘透传</string>
     <string name="item_master_summary">总开关。开启会一并打开下面全部规则；关闭后模块完全不干预按键，行为回到系统默认。</string>
 
+    <string name="group_apps">选择应用</string>
+    <string name="item_scope_all">全部生效</string>
+    <string name="item_scope_all_summary">开启时对所有应用生效。关闭后只在选中的应用里替换小米快捷键，其余应用保持小米默认行为。</string>
+    <string name="item_scope_apps">选择应用</string>
+    <string name="item_scope_apps_summary_none">未选择应用（关闭「全部生效」后模块不会生效）</string>
+    <string name="item_scope_apps_summary">已选择 %1$d 个应用</string>
+    <string name="item_scope_apps_summary_all">全部应用生效中</string>
+
+    <!-- 选择应用页 -->
+    <string name="picker_title">选择应用</string>
+    <string name="picker_search">搜索应用名称或包名</string>
+    <string name="picker_count">已选 %1$d 个</string>
+    <string name="picker_empty">没有匹配的应用</string>
+    <string name="picker_loading">正在加载应用…</string>
+    <string name="picker_menu">更多</string>
+    <string name="picker_select_all">全选</string>
+    <string name="picker_clear">清除</string>
+    <string name="picker_invert">反选</string>
+    <string name="picker_filter">过滤</string>
+    <string name="picker_sort">排序</string>
+    <string name="picker_sort_name">名称</string>
+    <string name="picker_sort_pkg">应用包名称</string>
+    <string name="picker_sort_install">安装时间</string>
+    <string name="picker_sort_update">更新时间</string>
+    <string name="picker_sort_reverse">反转</string>
+    <string name="picker_hide_system">过滤系统应用</string>
+    <string name="picker_only_selected">仅显示已选</string>
+    <string name="picker_external">外部</string>
+    <string name="picker_import">从剪切板导入</string>
+    <string name="picker_export">导出至剪切板</string>
+    <string name="picker_toast_exported">已导出 %1$d 个包名</string>
+    <string name="picker_toast_imported">已导入 %1$d 个包名</string>
+    <string name="picker_toast_clip_empty">剪切板为空或没有有效的包名</string>
+    <string name="picker_toast_clip_fail">无法访问剪切板</string>
+    <string name="picker_selected_group">已选</string>
+    <string name="picker_toast_all">已全选 %1$d 个应用</string>
+    <string name="picker_toast_cleared">已清除全部选择</string>
+    <string name="picker_perm_hint">应用列表不完整？点这里开启「读取应用列表」</string>
+    <string name="picker_perm_failed">没有可打开设置页的应用</string>
+
     <string name="group_keys">按键</string>
     <string name="item_alt_tab">Alt+Tab</string>
-    <string name="item_alt_tab_summary">只发给远程桌面，系统不再弹出最近任务。</string>
+    <string name="item_alt_tab_summary">最近任务</string>
     <string name="item_win_key">Win 键</string>
-    <string name="item_win_key_summary">单按不再弹出 Dock / 快捷键菜单，直接透传。</string>
+    <string name="item_win_key_summary">单键长按弹出 Dock / 快捷键菜单</string>
     <string name="item_win_d">Win+D</string>
-    <string name="item_win_d_summary">不再触发系统的「显示桌面」。</string>
+    <string name="item_win_d_summary">返回桌面</string>
     <string name="item_win_tab">Win+TAB</string>
-    <string name="item_win_tab_summary">不再触发系统的最近任务。</string>
+    <string name="item_win_tab_summary">最近任务</string>
+
+    <string name="group_shortcuts">系统快捷键</string>
+    <string name="item_win_w">Win+W</string>
+    <string name="item_win_w_summary">关闭本机窗口</string>
+    <string name="item_win_n">Win+N</string>
+    <string name="item_win_n_summary">下拉通知中心</string>
+    <string name="item_win_m">Win+M</string>
+    <string name="item_win_m_summary">打开控制中心</string>
+    <string name="item_win_a">Win+A</string>
+    <string name="item_win_a_summary">截全屏</string>
+    <string name="item_win_shift_a">Win+Shift+A</string>
+    <string name="item_win_shift_a_summary">区域截屏</string>
+    <string name="item_win_l">Win+L</string>
+    <string name="item_win_l_summary">锁屏</string>
 
     <string name="group_ui">界面</string>
     <string name="item_show_icon">显示桌面图标</string>
     <string name="item_show_icon_summary">关闭后从桌面隐藏图标，可通过「设置 → 应用 → HyperPadMeta」重新打开本页。</string>
 
+    <string name="toast_scope_all_on">先关闭「全部生效」，再选择应用</string>
     <string name="toast_icon_hidden">桌面图标已隐藏，可从「设置 → 应用 → HyperPadMeta → 打开」重新进入</string>
 
     <!-- 关于页 -->
