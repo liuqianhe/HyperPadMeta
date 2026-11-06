@@ -34,6 +34,7 @@ import pub.chara.hyperpadmeta.KeyRules
 object HyperOSAltTabHooks : BaseHook() {
 
     private const val MIUI_PWM = "com.android.server.policy.BaseMiuiPhoneWindowManager"
+    private const val MIUI_KEY_INTERCEPT = "com.android.server.policy.MiuiKeyInterceptExtend"
     private const val KEY_COMBO_RULE = "com.android.server.policy.KeyboardCombinationRule"
     private const val KEY_COMBO_MANAGER = "com.android.server.policy.KeyCombinationManager"
 
@@ -56,9 +57,12 @@ object HyperOSAltTabHooks : BaseHook() {
         }
 
         // 2) 冗余保险：即使上面的短路被绕过，也不让小米通知系统弹最近任务
+        //    守卫必须按事件判断：handleAltTab 同时管 Alt+TAB 和 Win+TAB，
+        //    只看 Alt+Tab 开关的话，关掉 Alt+Tab 透传但开着 Win+TAB 时系统会再弹一次。
         try {
             findMethod(MIUI_PWM) { name == "handleAltTab" }.hookBefore { param ->
-                if (Config.altTabEnabled) param.result = null
+                val event = param.args.firstOrNull { it is KeyEvent } as? KeyEvent ?: return@hookBefore
+                if (KeyRules.shouldPassthrough(event)) param.result = null
             }
             log("HyperOS handleAltTab hooked")
         } catch (e: Throwable) {
@@ -97,6 +101,26 @@ object HyperOSAltTabHooks : BaseHook() {
                 log("HyperOS KeyCombinationManager.$methodName hooked")
             } catch (e: Throwable) {
                 log("HyperOS KeyCombinationManager.$methodName hook failed!")
+                XposedBridge.log(e)
+            }
+        }
+
+        // 5) 根治点：getKeyInterceptType* 返回 1（TYPE_INTERCEPT_MIUI_AND_AOSP）
+        //
+        // 0（TYPE_INTERCEPT_NULL）不是「放行」而是「没有特殊类型」，方法会继续走完整条 MIUI 处理链：
+        // dispatching 里继续执行 handleAltTab() —— 而它对按住 Win 的 TAB 会发
+        // notifyKeyboardShortcutKey("KEY_TAB", "SHOW_RECENT_APPS") 弹最近任务，
+        // 于是远程桌面收到 Win+Tab 的同时安卓也响应了一次。
+        // 返回 1 时 queueing / dispatching 两条链都在最前面 "pass the key to app" 并 return。
+        for (methodName in listOf("getKeyInterceptTypeBeforeQueueing", "getKeyInterceptTypeBeforeDispatching")) {
+            try {
+                findMethod(MIUI_KEY_INTERCEPT) { name == methodName }.hookBefore { param ->
+                    val event = param.args.firstOrNull { it is KeyEvent } as? KeyEvent ?: return@hookBefore
+                    if (KeyRules.shouldPassthrough(event)) param.result = 1
+                }
+                log("HyperOS MiuiKeyInterceptExtend.$methodName hooked")
+            } catch (e: Throwable) {
+                log("HyperOS MiuiKeyInterceptExtend.$methodName hook failed!")
                 XposedBridge.log(e)
             }
         }
